@@ -1,5 +1,7 @@
 # OvrFlw
 
+> Previously: AMReX-based Exascale Simulation Software for Incompressible Flows (AMRESSIF)
+
 A GPU-accelerated, MPI-parallel incompressible Navier-Stokes solver built on [AMReX](https://github.com/AMReX-Codes/amrex).
 
 OvrFlw implements a **fractional step (projection) method** on a **hybrid staggered/non-staggered grid** — contravariant velocities live at face centers, Cartesian velocities and pressure live at cell centers. The momentum step uses a 4-stage Runge-Kutta pseudo-time-stepping scheme; the pressure correction step uses AMReX's algebraic multigrid (MLMG) or GMRES.
