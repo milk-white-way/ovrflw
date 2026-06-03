@@ -205,6 +205,20 @@ AMRESSIF/
 
 ---
 
+## Team
+
+**Thien-Tam Nguyen**
+Department of Civil, Construction and Environmental Engineering, North Dakota State University
+[www.bettercalltam.org](https://www.bettercalltam.org)
+
+**Dr. Trung Le**
+Department of Civil, Construction and Environmental Engineering, North Dakota State University
+
+**Dr. Andy Nonaka**
+Center for Computational Sciences and Engineering (CCSE), Lawrence Berkeley National Laboratory
+
+---
+
 ## License
 
 [CC BY-NC-ND 4.0](LICENSE.md) — free to use and share for non-commercial purposes with attribution; derivatives require permission.
