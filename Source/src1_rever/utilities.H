@@ -13,9 +13,9 @@ void cont2cart (amrex::MultiFab& velCart,
                 int const& Nghost,
                 amrex::Vector<int> const& phy_bc_lo,
                 amrex::Vector<int> const& phy_bc_hi,
-				amrex::Vector<amrex::Real> const& inflow_waveform,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> inflow_waveform,
 				amrex::Real& time,
-                int const& n_cell);
+                amrex::Vector<int> const& n_cell);
 
 void shift_face_to_center(amrex::MultiFab& cc_analytical_diff,
                           amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& velCont );

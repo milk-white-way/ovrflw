@@ -4,9 +4,9 @@
  * @brief This is the main code
  * @version 0.3
  * @date 2024-06-24
- * 
+ *
  * @copyright Copyright (c) 2024
- * 
+ *
  */
 // =================== LISTING KERNEL HEADERS ==============================
 #include <AMReX_Gpu.H>
@@ -54,18 +54,20 @@ void main_main ()
 	auto strt_time = ParallelDescriptor::second();
 
 	// AMREX_SPACEDIM: number of dimensions
-	int n_cell; 		// number of cells on each side of a square (or cubic) domain 
-	int max_grid_size_x; 	// The domain is broken into boxes of size max_grid_size
+	Vector<int> n_cell(AMREX_SPACEDIM, 0); // number of cells on each side of the physical domain
+	int max_grid_size_x; // The domain is broken into boxes of size max_grid_size
 	int max_grid_size_y;
 	int max_grid_size_z;
-	int nsteps; 		// Steps to run in the simulation  
+	int nsteps; 		// Steps to run in the simulation
 
 	int plot_int; 		// How often to write plot files			; input <=0 to turn off
 	int txt_int;   		// How often to write text files			; input <=0 to turn off
 	int chk_int; 		// How often to write checkpoint files ; input <=0 to turn off
 	int chk_out; 		// Checkpoint frame to load
 
-	int IterNum, PSEUDO_TIMESTEPPING;
+	int IterNum;
+	int PSEUDO_TIMESTEPPING;
+	int PRESSURE_GRADIENT_APPROACH;
 
 	Real ren; 			// Reynolds number
 	Real vis;   	  	// Kinematic Viscosity
@@ -79,7 +81,7 @@ void main_main ()
 	Vector<amrex::Real> lo_phy_dim(AMREX_SPACEDIM, 0);
 	Vector<amrex::Real> hi_phy_dim(AMREX_SPACEDIM, 0);
 
-	Vector<amrex::Real> inflow_waveform(AMREX_SPACEDIM, 0.0);
+	Vector<amrex::Real> inflow_vec(AMREX_SPACEDIM, 0.0);
 
 	int target_resolution;
 
@@ -90,10 +92,11 @@ void main_main ()
 		// ParmParse is way of reading inputs from the inputs file
 		ParmParse pp;
 
-		// We need to get n_cell from the inputs file - this is the number of cells on each side of
-		//   a square (or cubic) domain.
-		pp.get("n_cell", n_cell);
-		amrex::Print() << "INFO| number of cells in each side of the domain: " << n_cell << "\n";
+		// We need to get n_cell from the inputs file
+		pp.queryarr("n_cell", n_cell);
+		for (int idim=0; idim<AMREX_SPACEDIM; idim++) {
+			amrex::Print() << "INFO| number of cells in " << idim+1 << "th dimension: " << n_cell[idim] << "\n";
+		}
 
 		// The domain is broken into boxes of size max_grid_size
 		pp.get("max_grid_size_x", max_grid_size_x);
@@ -128,7 +131,7 @@ void main_main ()
 		pp.queryarr("phy_bc_lo", phy_bc_lo);
 		pp.queryarr("phy_bc_hi", phy_bc_hi);
 
-		pp.queryarr("inflow_waveform", inflow_waveform);
+		pp.queryarr("inflow_waveform", inflow_vec);
 
 		// Parsing the target resolution from input file
 		target_resolution = -1;
@@ -139,6 +142,9 @@ void main_main ()
 
 		PSEUDO_TIMESTEPPING = 1;
 		pp.query("PSEUDO_TIMESTEPPING", PSEUDO_TIMESTEPPING);
+
+		PRESSURE_GRADIENT_APPROACH = 2;
+		pp.query("PRESSURE_GRADIENT_APPROACH", PRESSURE_GRADIENT_APPROACH);
 
 		// Default plot_int to -1, allow us to set it to something else in the inputs file
 		// If int < 0 then no plot files will be written
@@ -156,6 +162,30 @@ void main_main ()
 		pp.query("chk_out", chk_out);
 	}
 
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-= Parsing Initial Condition Parameters =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+	std::string ic_type = "static";
+	Vector<amrex::Real> ic_velocity_static(AMREX_SPACEDIM, 0.0);
+	amrex::Real ic_pressure_static = 0.0;
+	std::string ic_velocity_x_expr = "0";
+	std::string ic_velocity_y_expr = "0";
+	std::string ic_velocity_z_expr = "0";
+	std::string ic_pressure_expr   = "0";
+	int stop_after_init = 0;
+	{
+		ParmParse pp;
+		pp.query("ic_type",            ic_type);
+		pp.queryarr("ic_velocity_static", ic_velocity_static);
+		pp.query("ic_pressure_static", ic_pressure_static);
+		pp.query("ic_velocity_x_expr", ic_velocity_x_expr);
+		pp.query("ic_velocity_y_expr", ic_velocity_y_expr);
+		pp.query("ic_velocity_z_expr", ic_velocity_z_expr);
+		pp.query("ic_pressure_expr",   ic_pressure_expr);
+		pp.query("stop_after_init",    stop_after_init);
+	}
+
+	GpuArray<Real, AMREX_SPACEDIM> inflow_waveform;
+	for (int d = 0; d < AMREX_SPACEDIM; ++d) inflow_waveform[d] = inflow_vec[d];
+
 	Vector<int> is_periodic(AMREX_SPACEDIM, 0);
 	// BCType::int_dir = 0
 	for (int idim=0; idim < AMREX_SPACEDIM; ++idim) {
@@ -168,9 +198,9 @@ void main_main ()
 	IntVect max_grid_size(AMREX_D_DECL(max_grid_size_x, max_grid_size_y, max_grid_size_z));
 
 	// Calculating number of step to reach the targeted resolution
-	int nsteps_target = target_resolution == -1 ? 0 : n_cell/target_resolution - 1;
+	// int nsteps_target = target_resolution == -1 ? 0 : n_cell/target_resolution - 1;
 	amrex::Print() << "INFO| target resolution: " << target_resolution << "\n";
-	amrex::Print() << "INFO| number of steps to reach the target resolution: " << nsteps_target << "\n";
+	//amrex::Print() << "INFO| number of steps to reach the target resolution: " << nsteps_target << "\n";
 
 	// Nghost = number of ghost cells for each array
 	int Nghost = 2; // 2nd order accuracy scheme is used for convective terms
@@ -253,7 +283,7 @@ void main_main ()
 
 	Array<MultiFab, AMREX_SPACEDIM> array_analytical_vel; // store the analytical velocity (if present) of the staggered grid
 
-	// Variables at check-out time 
+	// Variables at check-out time
 	/*
 	MultiFab pressure;
 	MultiFab vel_xCont;
@@ -266,17 +296,11 @@ void main_main ()
 
 	Geometry geom;
 	// make Geometry
-	IntVect dom_lo(AMREX_D_DECL(       0,        0,        0));
-	IntVect dom_hi(AMREX_D_DECL(n_cell-1, n_cell-1, n_cell-1));
+	IntVect dom_lo(AMREX_D_DECL(          0,           0,           0));
+	IntVect dom_hi(AMREX_D_DECL(n_cell[0]-1, n_cell[1]-1, n_cell[2]-1));
 	Box domain(dom_lo, dom_hi);
-	// This defines the physical box, [0,1] in each direction.
-	// CASE: Taylor-Green vortex
-	//RealBox real_box({AMREX_D_DECL( Real(0.0), Real(0.0), Real(0.0))},
-	//				 {AMREX_D_DECL( Real(2.0)*M_PI, Real(2.0)*M_PI, Real(2.0)*M_PI)}); 
-
-	// CASE: Lid-driven cavity
 	RealBox real_box({AMREX_D_DECL( lo_phy_dim[0], lo_phy_dim[1], lo_phy_dim[2] )},
-					 {AMREX_D_DECL( hi_phy_dim[0], hi_phy_dim[1], hi_phy_dim[2] )}); 
+					 {AMREX_D_DECL( hi_phy_dim[0], hi_phy_dim[1], hi_phy_dim[2] )});
 	// This defines a Geometry object
 	// NOTE: the coordinate system is Cartesian
 	geom.define(domain, &real_box, CoordSys::cartesian, is_periodic.data());
@@ -295,14 +319,19 @@ void main_main ()
 
 	// Setup the target point for extracting the velocity field
 	GpuArray<Real,AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-	Real const i_target = n_cell/4 - 1;
+	Real const i_target = n_cell[0]/4 - 1;
 	//Real const i_target = 0;
 	Real const x_cart_target = (i_target + Real(0.5)) * dx[0] + prob_lo[0];
 	Real const x_cont_target = (i_target + Real(0.0)) * dx[0] + prob_lo[0];
 
-	Real const j_target = n_cell/4 - 1;
+	Real const j_target = n_cell[1]/4 - 1;
 	//Real const j_target = 0;
 	Real const y_target = (j_target + Real(0.5)) * dx[1] + prob_lo[1];
+#if AMREX_SPACEDIM > 2
+	Real const k_target = n_cell[2]/4 - 1;
+	//Real const k_target = 0;
+	Real const z_target = (k_target + Real(0.5)) * dx[2] + prob_lo[2];
+#endif
 
 	amrex::Print() << "DEBUG| Extract Cartesian solution at (x ; y) = (" << x_cart_target << " ; " << y_target << ") \n";
 	amrex::Print() << "DEBUG| Extract contravariant solution at (x ; y) = (" << x_cont_target << " ; " << y_target << ") \n";
@@ -318,17 +347,17 @@ void main_main ()
 	//ba_singleGrid.define(domain);
 	// Break up boxarray "ba" into chunks no larger than "max_grid_size" along a direction
 	ba.maxSize(max_grid_size);
-	
+
 	// How Boxes are distrubuted among MPI processes
 	// Distribution mapping between the processors
 	dm.define(ba, ParallelDescriptor::NProcs());
-	
+
 	if (chk_out > 0) {
 		amrex::Print() << "INFO| REQUEST FROM USER TO START FROM CHECKPOINT " << chk_out << "\n";
 		LoadCheckpoint(ba, dm, userCtx, velCont, velContPrev, time, chk_out);
 	} else {
 		userCtx.define(ba, dm, Ncomp, 1);
-		
+
 		for (int dir = 0; dir < AMREX_SPACEDIM; dir++)
 		{
 			edge_ba = ba;
@@ -342,7 +371,7 @@ void main_main ()
 			//velCont_singleGrid[dir].define(edge_ba_singleGrid, dm_singleGrid, 1, 0);
 		}
 	}
-		
+
 	// Cell-centered variables
 	velCart.define(ba, dm, AMREX_SPACEDIM, Nghost);
 	velCartPrev.define(ba, dm, AMREX_SPACEDIM, Nghost);
@@ -358,7 +387,7 @@ void main_main ()
 	poisson_sol.define(ba, dm, 1, 1);
 	cc_analytical_diff.define(ba, dm, 3, 0);
 	cc_kinetic_energy.define(ba, dm, 1, 0);
-					
+
 	// Face-centered variables
 	for (int dir = 0; dir < AMREX_SPACEDIM; dir++)
 	{
@@ -381,19 +410,19 @@ void main_main ()
 
 		array_analytical_vel[dir].define(edge_ba, dm, 1, 0);
 	}
-		
+
 	Box dom = geom.Domain();
 
 	if (chk_out > 0) {
 		// Print information in the checkpoint file
-		amrex::Print() << "INFO| checkout time: " << time << "\n";
 		amrex::Print() << "INFO| checkout box array: " << ba << "\n";
 		amrex::Print() << "INFO| checkout geometry: " << geom << "\n";
+		amrex::Print() << "INFO| checkout time: " << time << "\n";
 
     	for (int dir=0; dir<AMREX_SPACEDIM; ++dir) {
         	MultiFab::Copy(velContDiff[dir], velCont[dir], 0, 0, 1, 0);
 			// Subtract src from dst
-			// MultiFab::Subtract(MultiFab& dst, MultiFab& src, int srccomp, int dstcomp, int numcomp, IntVect& nghost) 
+			// MultiFab::Subtract(MultiFab& dst, MultiFab& src, int srccomp, int dstcomp, int numcomp, IntVect& nghost)
         	MultiFab::Subtract(velContDiff[dir], velContPrev[dir], 0, 0, 1, 0);
     	}
 
@@ -403,379 +432,8 @@ void main_main ()
 		cont2cart(velCartPrev, velContPrev, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
 		amrex::Print() << "\n";
 
-		// Fill ghost cells for non-staggered grid
-
-    	// Periodic boundary conditions
-    	// -- periodic: 111
-    	velCart.FillBoundary(geom.periodicity());
-    	velCartPrev.FillBoundary(geom.periodicity()); // Not used in the calculation, so don't bother
-    	// Physical boundary conditions
-    	// -- wall: 135 (no-slip), -135 (slip)
-    	// -- inlet: 165 (constant velocity), -165 (time-dependent velocity)
-    	// -- outlet: 195 (constant velocity), -195 (time-dependent velocity)
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-   		for (MFIter mfi(velCart); mfi.isValid(); ++mfi) {
-      		const Box &vbx = mfi.growntilebox(Nghost);
-      		auto const &vel_cart = velCart.array(mfi);
-
-			auto const &west_wall_bcs = phy_bc_lo[0]; 	// x- wall
-			auto const &east_wall_bcs = phy_bc_hi[0]; 	// x+ wall
-	 		auto const &south_wall_bcs = phy_bc_lo[1];	// y- wall
-			auto const &north_wall_bcs = phy_bc_hi[1];	// y+ wall
-#if (AMREX_SPACEDIM > 2)
-			auto const &bakward_wall_bcs = phy_bc_lo[2]; // z- wall
-			auto const &forward_wall_bcs = phy_bc_hi[2]; // z+ wall
-#endif
-
-			auto const &inflow_x = inflow_waveform[0];
-			auto const &inflow_y = inflow_waveform[1];
-#if (AMREX_SPACEDIM > 2)
-			auto const &inflow_z = inflow_waveform[2];
-#endif
-
-			int lo = dom.smallEnd(0);
-			int hi = dom.bigEnd(0);
-			// Ghost cells to the left (of the West wall)
-			if (vbx.smallEnd(0) < lo) {
-				if (west_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-									   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i < lo) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(-i - 1, j, k, dir);
-							}
-						}
-					});
-				} else if (west_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-	 							   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i < lo) {
-							vel_cart(i, j, k, 0) = -vel_cart(-i - 1, j, k, 0);
-							vel_cart(i, j, k, 1) = vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = vel_cart(-i - 1, j, k, 2);
-#endif
-						}
-					});
-				} else if (west_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-								       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i < lo) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(-i - 1, j, k, 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = 2 - vel_cart(-i - 1, j, k, 2);
-#endif
-						}
-					});
-				} else if (west_wall_bcs == -165) {
-					amrex::ParallelFor(vbx,
-								       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i < lo) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(-i - 1, j, k, 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = 2 - vel_cart(-i - 1, j, k, 2);
-#endif
-						}
-					});
-				} else if (west_wall_bcs == 195) {
-					amrex::Abort("Not yet implemented");
-				} else if (west_wall_bcs == -195) {
-					amrex::Abort("Not yet implemented");
-				}
-			}
-
-			// Ghost cells to the right (of the East wall)
-		 	if (vbx.bigEnd(0) > hi) {
-			 	if (east_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-								       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i > hi) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(((n_cell - i) + (n_cell - 1)), j, k, dir);
-							}
-						}
-					});
-				} else if (east_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-								       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i > hi) {
-							vel_cart(i, j, k, 0) = -vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 0);
-							vel_cart(i, j, k, 1) = vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 2);
-#endif
-						}
-					});
-				} else if (east_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-								       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (i > hi) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 2);
-#endif
-					  	}
-					});
-			 	} else if (east_wall_bcs == -165) {
-				 	amrex::Abort("Not yet implemented");
-			 	} else if (east_wall_bcs == 195) {
-				 	amrex::Abort("Not yet implemented");
-			 	} else if (east_wall_bcs == -195) {
-				 	amrex::Abort("Not yet implemented");
-			 	}
-		 	}
-
-			lo = dom.smallEnd(1);
-			hi = dom.bigEnd(1);
-			// Ghost cells to the bottom (of the South wall)
-			if (vbx.smallEnd(1) < lo) {
-				if (south_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j < lo) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(i, -j - 1, k, dir);
-							}
-						}
-					});
-				} else if (south_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j < lo) {
-							vel_cart(i, j, k, 0) = vel_cart(i, -j - 1, k, 0);
-							vel_cart(i, j, k, 1) = -vel_cart(i, -j - 1, k, 1);
-	#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = vel_cart(i, -j - 1, k, 2);
-	#endif
-						}
-					});
-				} else if (south_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j < lo) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(i, -j - 1, k, 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(i, -j - 1, k, 1);
-	#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = 2 - vel_cart(i, -j - 1, k, 2);
-	#endif
-						}
-					});
-				} else if (south_wall_bcs == -165) {
-					amrex::Abort("Not yet implemented");
-				} else if (south_wall_bcs == 195) {
-					amrex::Abort("Not yet implemented");
-				} else if (south_wall_bcs == -195) {
-					amrex::Abort("Not yet implemented");
-				}
-			}
-
-			// Ghost cells to the top (of the North wall)
-			if (vbx.bigEnd(1) > hi) {
-				if (north_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j > hi) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, dir);
-							}
-						}
-					});
-				} else if (north_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j > hi) {
-							vel_cart(i, j, k, 0) = vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-							vel_cart(i, j, k, 1) = -vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-	#if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 2);
-	#endif
-						}
-					});
-				} else if (north_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (j > hi) {
-								vel_cart(i, j, k, 0) = 2*inflow_x - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-								vel_cart(i, j, k, 1) = 2*inflow_y - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-	#if (AMREX_SPACEDIM > 2)
-								vel_cart(i, j, k, 2) = 2*inflow_z - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 2);
-	#endif
-						}
-					});
-				} else if (north_wall_bcs == -165) {
-					amrex::Abort("Not yet unlocked");
-				} else if (north_wall_bcs == 195) {
-					amrex::Abort("Not yet unlocked");
-				} else if (north_wall_bcs == -195) {
-					amrex::Abort("Not yet unlocked");
-				}
-			}
-
-#if (AMREX_SPACEDIM > 2)
-			lo = dom.smallEnd(2);
-			hi = dom.bigEnd(2);
-
-			if (vbx.smallEnd(2) < lo) {
-				if (bakward_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k < lo) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(i, j, -k -1, dir);
-							}
-						}
-					});
-				} else if (bakward_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k < lo) {
-							vel_cart(i, j, k, 0) = vel_cart(i, j, -k -1, 0);
-							vel_cart(i, j, k, 1) = vel_cart(i, j, -k -1, 1);
-							vel_cart(i, j, k, 2) = -vel_cart(i, j, -k -1, 2);
-						}
-					});
-				} else if (bakward_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k < lo) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(i, j, -k -1, 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(i, j, -k -1, 1);
-							vel_cart(i, j, k, 2) = 2 - vel_cart(i, j, -k -1, 2);
-						}
-					});
-				} else if (bakward_wall_bcs == -165) {
-					amrex::Abort("Not yet unlocked");
-				} else if (bakward_wall_bcs == 195) {
-					amrex::Abort("Not yet unlocked");
-				} else if (bakward_wall_bcs == -195) {
-					amrex::Abort("Not yet unlocked");
-				}
-			}
-
-			if (vbx.bigEnd(2) > hi) {
-				if (forward_wall_bcs == 135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k > hi) {
-							for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-								vel_cart(i, j, k, dir) = -vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), dir);
-							}
-						}
-					});
-				} else if (forward_wall_bcs == -135) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k > hi)	{
-							vel_cart(i, j, k, 0) = vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-							vel_cart(i, j, k, 1) = vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-							vel_cart(i, j, k, 2) = -vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 2);
-						}
-					});
-				} else if (forward_wall_bcs == 165) {
-					amrex::ParallelFor(vbx,
-									[=] AMREX_GPU_DEVICE(int i, int j, int k) {
-						if (k > hi) {
-							vel_cart(i, j, k, 0) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-							vel_cart(i, j, k, 1) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-							vel_cart(i, j, k, 2) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 2);
-						}
-					});
-				} else if (forward_wall_bcs == -165) {
-					amrex::Abort("Not yet unlocked");
-				} else if (forward_wall_bcs == 195) {
-					amrex::Abort("Not yet unlocked");
-				} else if (forward_wall_bcs == -195) {
-					amrex::Abort("Not yet unlocked");
-				}
-			}
-#endif
-		}
-
      	userCtx.FillBoundary(geom.periodicity());
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-		for (MFIter mfi(userCtx); mfi.isValid(); ++mfi)
-		{
-			const Box& vbx = mfi.growntilebox(1);
-			auto const& ctx = userCtx.array(mfi);
-
-			int lo = dom.smallEnd(0); //amrex::Print() << lo << "\n";
-			int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
-
-			if (vbx.smallEnd(0) < lo) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( i < lo ) {
-						ctx(i, j, k, 0) = ctx(-i - 1, j, k, 0);
-						ctx(i, j, k, 1) = ctx(-i - 1, j, k, 1);
-					}
-				});
-			}
-
-			if (vbx.bigEnd(0) > hi) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( i > hi ) {
-						ctx(i, j, k, 0) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 0);
-						ctx(i, j, k, 1) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 1);
-					}
-				});
-			}
-
-			lo = dom.smallEnd(1);
-			hi = dom.bigEnd(1);
-
-			if (vbx.smallEnd(1) < lo) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( j < lo ) {
-						ctx(i, j, k, 0) = ctx(i, -j - 1, k, 0);
-						ctx(i, j, k, 1) = ctx(i, -j - 1, k, 1);
-					}
-				});
-			}
-
-			if (vbx.bigEnd(1) > hi) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( j > hi ) {
-						ctx(i, j, k, 0) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-						ctx(i, j, k, 1) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-					}
-				});
-			}
-
-#if (AMREX_SPACEDIM > 2)
-			lo = dom.smallEnd(2);
-			hi = dom.bigEnd(2);
-
-			if (vbx.smallEnd(2) < lo) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( k < lo ) {
-						ctx(i, j, k, 0) = ctx(i, j, -k - 1, 0);
-						ctx(i, j, k, 1) = ctx(i, j, -k - 1, 1);
-					}
-				});
-			}
-
-			if (vbx.bigEnd(2) > hi) {
-				amrex::ParallelFor(vbx,
-								[=] AMREX_GPU_DEVICE (int i, int j, int k) {
-					if ( k > hi ) {
-						ctx(i, j, k, 0) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-						ctx(i, j, k, 1) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-					}
-				});
-			}
-#endif
-		}
+        enforce_bcs_for_velCart(velCart, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell, inflow_waveform);
 
 		amrex::Print() << "DEBUG| Ploting flow fields loaded from checkpoint file \n";
 		Export_Flow_Field("pltCheckout", userCtx, velCart, ba, dm, geom, time, chk_out);
@@ -785,18 +443,20 @@ void main_main ()
 	} else {
 		// time = starting time in the simulation
 		time = 0.0;
-		amrex::Print() << "INFO| start time: " << time << "\n";
 		amrex::Print() << "INFO| configured box array: " << ba << "\n";
 		amrex::Print() << "INFO| configured geometry: " << geom << "\n";
+		amrex::Print() << "INFO| start time: " << time << "\n";
 
 		amrex::Print() << "========================= INITIALIZATION STEP ========================= \n";
-		hybrid_grid_init(userCtx, velCont, velContPrev, velCart, velCartPrev, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, dt, n_cell);
-		// Write a plotfile of the initial data if plot_int > 0
-		// (plot_int was defined in the inputs file)
-		if (plot_int > 0)
-		{
-			Export_Flow_Field("pltInit", userCtx, velCart, ba, dm, geom, time, 0);
-			Export_Flow_Field("pltInitPrev", userCtx, velCartPrev, ba, dm, geom, time, 0);
+		hybrid_grid_init(userCtx, velCont, velContPrev, velCart, velCartPrev, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, dt, n_cell,
+		                 ic_type, ic_velocity_static, ic_pressure_static,
+		                 ic_velocity_x_expr, ic_velocity_y_expr, ic_velocity_z_expr, ic_pressure_expr);
+		Export_Flow_Field("pltInit", userCtx, velCart, ba, dm, geom, time, 0);
+		Export_Flow_Field("pltInitPrev", userCtx, velCartPrev, ba, dm, geom, time, 0);
+
+		if (stop_after_init) {
+			amrex::Print() << "INFO| stop_after_init set — exiting after initialization.\n";
+			return;
 		}
 
 		starting_step = 1;
@@ -814,9 +474,9 @@ void main_main ()
 		{
 			if ( phy_bc_lo[idim] == 111 ) {
 				bc[n].setLo(idim, BCType::int_dir);
-			} else if ( std::abs(phy_bc_lo[idim]) == 135 || 
-						std::abs(phy_bc_lo[idim]) == 165 || 
-						std::abs(phy_bc_lo[idim]) == 195 ) {
+			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
+						std::abs(phy_bc_lo[idim]) == 151 ||
+						std::abs(phy_bc_lo[idim]) == 171 ) {
 				bc[n].setLo(idim, BCType::foextrap);
 			} else {
 				amrex::Abort("Invalid bc_lo");
@@ -824,9 +484,9 @@ void main_main ()
 
 			if ( phy_bc_hi[idim] == 111 ) {
 				bc[n].setHi(idim, BCType::int_dir);
-			} else if ( std::abs(phy_bc_lo[idim]) == 135 || 
-						std::abs(phy_bc_hi[idim]) == 165 || 
-						std::abs(phy_bc_hi[idim]) == 195 ) {
+			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
+						std::abs(phy_bc_hi[idim]) == 151 ||
+						std::abs(phy_bc_hi[idim]) == 171 ) {
 				bc[n].setHi(idim, BCType::foextrap);
 			} else {
 				amrex::Abort("Invalid bc_hi");
@@ -892,28 +552,31 @@ void main_main ()
 		Real normError = 1.e9;
 
 		amrex::Print() << "============================ ADVANCE STEP " << n << " ============================ \n";
-		//-----------------------------------------------
-		// This is the sub-iteration of the semi-implicit scheme
-		//-----------------------------------------------
 		while ( normError > momentum_tolerance )
 		{
-			//amrex::Print() << "SOLVING| Momentum | performing Runge-Kutta at pseudo step: " << countIter
-			//					 << " => latest error norm = " << normError << "\n";
 			if ( PSEUDO_TIMESTEPPING == 0 ) {
 				// EXPLICIT TIME MARCHING
-				// ------------------------- PRESSURE GRADIENT CALCULATION -------------------------
-				//gradient_calc_approach1(fluxTotal, fluxPrsGrad, cc_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-				gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-				// ------------------------- FLUX CALCULATION -------------------------
+				amrex::Print() << "SOLVING| Momentum | performing Explicit Time Marching... ";
 				fluxTotal.setVal(0.0);
+				// ---------- PRESSURE GRADIENT CALCULATION ----------------------------------------
+				if (PRESSURE_GRADIENT_APPROACH == 1 || PRESSURE_GRADIENT_APPROACH == 2) {
+                    gradient_calc_approach1(fluxTotal, fluxPrsGrad, cc_grad_phi, userCtx, geom, PRESSURE_GRADIENT_APPROACH);
+                    if (PRESSURE_GRADIENT_APPROACH == 2) {
+                        gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom);
+                    }
+                } else {
+                    amrex::Abort("Invalid PRESSURE_GRADIENT_TYPE");
+                }
+				// ---------- FLUX CALCULATION -----------------------------------------------------
 				convective_flux_calc_new_quick(fluxTotal, fluxConvect, fluxHalfN1, fluxHalfN2, fluxHalfN3, velCart, velStar, phy_bc_lo, phy_bc_hi, geom);
 				viscous_flux_calc(fluxTotal, fluxViscous, velCart, ren, geom);
 				fluxTotal.FillBoundary(geom.periodicity());
-				// --------------------------- MOMENTUM SOLVER ---------------------------
+				enforce_bcs_for_fluxTotal(fluxTotal, geom, n_cell);
+				// ---------- MOMENTUM SOLVER ------------------------------------------------------
 				momentum_righthand_side_calc(fluxTotal, array_grad_p, momentum_rhs, phy_bc_lo, phy_bc_hi, geom);
 				amrex::Print() << "SOLVING| Momentum | performing Explicit Time Marching ";
 				explicit_time_marching(momentum_rhs, velStar, velContDiff, geom, phy_bc_lo, phy_bc_hi, dt);
-				
+
 				normError = Error_Computation(velCont, velStar, velStarDiff, geom);
 				amrex::Print() << "=> latest error norm = " << normError << "\n";
 
@@ -924,101 +587,38 @@ void main_main ()
 
 				break;
 			} else {
-				// 4 sub-iterations of one RK4 iteration
+				// SEMI-IMPLICIT TIME MARCHING
 				amrex::Print() << "SOLVING| Momentum | performing RK4 Pseudo-Time Marching... ";
+				//------------------------------------------------------
+				// This is the sub-iteration of the semi-implicit scheme
+				//------------------------------------------------------
 				for (int sub = 0; sub < RungeKuttaOrder; ++sub )
 				{
-					// ------------------------- PRESSURE GRADIENT CALCULATION -------------------------
-					//gradient_calc_approach1(fluxTotal, fluxPrsGrad, cc_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-					gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-					// ------------------------- FLUX CALCULATION -------------------------
-					fluxTotal.setVal(0.0);
+				    fluxTotal.setVal(0.0);
+				    // ---------- PRESSURE GRADIENT CALCULATION ------------------------------------
+					if (PRESSURE_GRADIENT_APPROACH == 1 || PRESSURE_GRADIENT_APPROACH == 2) {
+                        gradient_calc_approach1(fluxTotal, fluxPrsGrad, cc_grad_phi, userCtx, geom, PRESSURE_GRADIENT_APPROACH);
+                        if (PRESSURE_GRADIENT_APPROACH == 2) {
+                            gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom);
+                        }
+                    } else {
+                        amrex::Abort("WARNING| Invalid PRESSURE_GRADIENT_TYPE. Valid options are 1 and 2. \n");
+                    }
+					// ---------- FLUX CALCULATION ----------------------------------------------------
 					convective_flux_calc_new_quick(fluxTotal, fluxConvect, fluxHalfN1, fluxHalfN2, fluxHalfN3, velCart, velStar, phy_bc_lo, phy_bc_hi, geom);
 					viscous_flux_calc(fluxTotal, fluxViscous, velCart, ren, geom);
-
 					fluxTotal.FillBoundary(geom.periodicity());
 					// Fluxes' normal component on the wall boundaries are set to zero
 					// Enforced by 1 layer of ghost cells
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-					for (MFIter mfi(fluxTotal); mfi.isValid(); ++mfi)
-					{
-						const Box& vbx = mfi.growntilebox(1);
-						auto const& flux_total = fluxTotal.array(mfi);
-
-						int lo = dom.smallEnd(0); //amrex::Print() << lo << "\n";
-						int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
-
-						if (vbx.smallEnd(0) < lo) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( i < lo ) {
-									flux_total(i, j, k, 0) = -flux_total(-i -1, j, k, 0);
-								}
-							});
-						}
-
-						if (vbx.bigEnd(0) > hi) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( i > hi ) {
-									flux_total(i, j, k, 0) = -flux_total(((n_cell - i) + (n_cell - 1)), j, k, 0);
-								}
-							});
-						}
-
-						lo = dom.smallEnd(1);
-						hi = dom.bigEnd(1);
-
-						if (vbx.smallEnd(1) < lo) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( j < lo ) {
-									flux_total(i, j, k, 1) = -flux_total(i, -j -1, k, 1);
-								}
-							});
-						}
-
-						if (vbx.bigEnd(1) > hi) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( j > hi ) {
-									flux_total(i, j, k, 1) = -flux_total(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-								}
-							});
-						}
-
-#if (AMREX_SPACEDIM > 2)
-						lo = dom.smallEnd(2);
-						hi = dom.bigEnd(2);
-
-						if (vbx.smallEnd(2) < lo) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( k < lo ) {
-									flux_total(i, j, k, 2) = -flux_total(i, j, -k -1, 2);
-								}
-							});
-						}
-
-						if (vbx.bigEnd(2) > hi) {
-							amrex::ParallelFor(vbx,
-											   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-								if ( k > hi ) {
-									flux_total(i, j, k, 2) = -flux_total(i, j, ((n_cell - k) + (n_cell - 1)), 2);
-								}
-							});
-						}
-#endif
-					}
+					enforce_bcs_for_fluxTotal(fluxTotal, geom, n_cell);
+					// ---------- MOMENTUM SOLVER -----------------------------------------------------
 					momentum_righthand_side_calc(fluxTotal, array_grad_p, momentum_rhs, phy_bc_lo, phy_bc_hi, geom);
-					// --------------------------- MOMENTUM SOLVER ---------------------------
-					runge_kutta4_pseudo_time_stepping(rk, sub, momentum_rhs, velStar, velCont, velContDiff, velContPrev, velCart, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, n_cell, time, dt);
+					runge_kutta4_pseudo_time_stepping(rk, sub, momentum_rhs, velStar, velCont, velContDiff, velContPrev, velCart, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, dt);
+					cont2cart(velCart, velStar, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
 				} // RUNGE-KUTTA | END
 				normError = Error_Computation(velCont, velStar, velStarDiff, geom);
 				amrex::Print() << "=> step = " << countIter << "; error norm = " << normError << "\n";
-			}
+			} // PSEUDO-TIME-STEPPING | END
 			// Re-assign guess for the next iteration
 			for ( int comp=0; comp < AMREX_SPACEDIM; ++comp)
 			{
@@ -1029,13 +629,10 @@ void main_main ()
 			//if (countIter == 2) {
 			if (countIter > IterNum) {
 				amrex::Print() << "WARNING| Exceeded number of momenum iterations; exiting loop\n";
-				//amrex::Print() << "Forced break at pseudo step " << countIter << "\n";
-				break;
 			}
 			if ( normError > 1.e2 )
 			{
-				amrex::Print() << "WARNING| Error Norm diverges, exiting loop\n";
-				break;
+			    amrex::Abort("WARNING| Error Norm diverges, stoping solver...\n");
 			}
 			//break; // Tactical breakpoint
 		}// End of the Momentum loop iteration!
@@ -1077,92 +674,17 @@ void main_main ()
 		}
 		MultiFab::Copy(userCtx, poisson_sol, 0, 1, 1, 0);
 		userCtx.FillBoundary(geom.periodicity());
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-	for (MFIter mfi(userCtx); mfi.isValid(); ++mfi)
-	{
-		const Box& vbx = mfi.growntilebox(1);
-		auto const& ctx = userCtx.array(mfi);
-
-		int lo = dom.smallEnd(0); //amrex::Print() << lo << "\n";
-		int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
-
-		if (vbx.smallEnd(0) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( i < lo ) {
-					ctx(i, j, k, 0) = ctx(-i - 1, j, k, 0);
-					ctx(i, j, k, 1) = ctx(-i - 1, j, k, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(0) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( i > hi ) {
-					ctx(i, j, k, 0) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 0);
-					ctx(i, j, k, 1) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 1);
-				}
-			});
-		}
-
-		lo = dom.smallEnd(1);
-		hi = dom.bigEnd(1);
-
-		if (vbx.smallEnd(1) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( j < lo ) {
-					ctx(i, j, k, 0) = ctx(i, -j - 1, k, 0);
-					ctx(i, j, k, 1) = ctx(i, -j - 1, k, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(1) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( j > hi ) {
-					ctx(i, j, k, 0) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-					ctx(i, j, k, 1) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-				}
-			});
-		}
-
-#if (AMREX_SPACEDIM > 2)
-		lo = dom.smallEnd(2);
-		hi = dom.bigEnd(2);
-
-		if (vbx.smallEnd(2) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( k < lo ) {
-					ctx(i, j, k, 0) = ctx(i, j, -k - 1, 0);
-					ctx(i, j, k, 1) = ctx(i, j, -k - 1, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(2) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( k > hi ) {
-					ctx(i, j, k, 0) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-					ctx(i, j, k, 1) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-				}
-			});
-		}
-#endif
-	}
+		enforce_bcs_for_userCtx(userCtx, geom, n_cell);
 
 		// Update the solution
-		// u_i^{n+1} = u_i^*- 2dt/3 * grad(\phi^{n+1})
-		// p^{n+1} = p^n  + \phi^{n+1} - Re^-1 * div(u_i^*)
-		// also update velContDiff = velCont-velContPrev
-		update_solution(array_grad_p, array_grad_phi, fluxPrsGrad, cc_grad_phi, poisson_rhs, userCtx, velCart, velCont, velStar, geom, time, dt, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, n_cell, ren);
-	
+		// Step 1 --- correct velocity: u_i^{n+1} = u_i^*- 2dt/3 * grad(\phi^{n+1})
+		// Step 2 --- update pressure: p^{n+1} = p^n  + \phi^{n+1} - Re^-1 * div(u_i^*)
+		gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom);
+		update_solution(userCtx, velCart, array_grad_phi, velCont, velStar, geom, dt);
+		cont2cart(velCart, velCont, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
+		userCtx.FillBoundary(geom.periodicity());
+		enforce_bcs_for_userCtx(userCtx, geom, n_cell);
+
 		// Writing checkpoint files
 		if (chk_int > 0 && n%chk_int == 0)
 		{
@@ -1186,7 +708,7 @@ void main_main ()
 		{
 			const std::string &analytical_export = amrex::Concatenate("pltAnalytic", n, 5);
 			WriteSingleLevelPlotfile(analytical_export, cc_analytical_diff, {"p-exac","u-exac", "v-exac"}, geom, time, n);
-    
+
 			Export_Flow_Field("pltResults", userCtx, velCart, ba, dm, geom, time, n);
 		}
 

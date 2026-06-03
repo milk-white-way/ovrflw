@@ -27,8 +27,7 @@ void runge_kutta4_pseudo_time_stepping (const amrex::GpuArray<amrex::Real,MAX_RK
                                         int const& Nghost,
                                         amrex::Vector<int> const& phy_bc_lo,
                                         amrex::Vector<int> const& phy_bc_hi,
-                                        amrex::Vector<amrex::Real> const& inflow_waveform,
-                                        int const& n_cell,
+                                        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> inflow_waveform,
 										amrex::Real& time,
                                         amrex::Real const& dt);
 

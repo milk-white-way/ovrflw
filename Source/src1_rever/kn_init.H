@@ -12,28 +12,24 @@ void init_userCtx (int i, int j, int k,
 {
     using amrex::Real;
 
-    // ctx[0] is pressure
-    // ctx[1] is phi
-    // CASE: 2D Taylor-Green vortex flow
+    // CASE: Taylor-Green vortex flow
+    /*
     Real x = prob_lo[0] + (i+Real(0.5)) * dx[0];
     Real y = prob_lo[1] + (j+Real(0.5)) * dx[1];
 #if (AMREX_SPACEDIM > 2)
-    Real z = prob_lo[2] + (k+Real(0.5))*dx[2];
+    Real z = prob_lo[2] + (k+Real(0.5)) * dx[2];
 #endif
 
     ctx(i, j, k, 0) = Real(0.25) * ( std::cos(Real(2.0) * x) + std::cos(Real(2.0) * y) );
-    /*
 #if (AMREX_SPACEDIM > 2)
         * ( std::cos(Real(2.0) * z)  + 2) * Real(0.25);
 #else
         ;
 #endif
     */
-    //ctx(i, j, k, 0) = Real(0.25) * ( std::cos(Real(4.0) * M_PI * x) + std::cos(Real(4.0) * M_PI * y) );
 
-    // CASE: 2D lid-driven cavity flow
-    ctx(i, j, k, 0) = Real(0.0);
-    ctx(i, j, k, 1) = Real(0.0);
+    ctx(i, j, k, 0) = Real(0.0); // First component of ctx is pressure
+    ctx(i, j, k, 1) = Real(0.0); // Second component of ctx is phi
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE

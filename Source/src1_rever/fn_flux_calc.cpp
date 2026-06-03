@@ -68,7 +68,7 @@ void convective_flux_calc_new_quick ( MultiFab& fluxTotal,
             auto const& up = ucon - std::abs(ucon);
             //amrex::Print() << "DEBUG| (i, j) = (" << i << ", " << j << ") | ucon = " << ucon << " ; ud = " << ud << " ; up = " << up << "\n";
 
-            uhalf_xface(i, j, k) = up * ( amrex::Real(1.0/8.0) * ( - vel_cart(i+1, j, k, 0) - 2*vel_cart(i, j, k, 0) + 3*vel_cart(i-1, j, k, 0) ) + vel_cart(i, j, k, 0) ) + ud * ( amrex::Real(1.0/8.0) * ( - vel_cart(i-2, j, k, 0) - 2*vel_cart(i-1, j, k, 0) + 3*vel_cart(i, j, k, 0) ) + vel_cart(i-1, j, k, 0) );  
+            uhalf_xface(i, j, k) = up * ( amrex::Real(1.0/8.0) * ( - vel_cart(i+1, j, k, 0) - 2*vel_cart(i, j, k, 0) + 3*vel_cart(i-1, j, k, 0) ) + vel_cart(i, j, k, 0) ) + ud * ( amrex::Real(1.0/8.0) * ( - vel_cart(i-2, j, k, 0) - 2*vel_cart(i-1, j, k, 0) + 3*vel_cart(i, j, k, 0) ) + vel_cart(i-1, j, k, 0) );
 
             vhalf_xface(i, j, k) = up * ( amrex::Real(1.0/8.0) * ( - vel_cart(i+1, j, k, 1) - 2*vel_cart(i, j, k, 1) + 3*vel_cart(i-1, j, k, 1) ) + vel_cart(i, j, k, 1) ) + ud * ( amrex::Real(1.0/8.0) * ( - vel_cart(i-2, j, k, 1) - 2*vel_cart(i-1, j, k, 1) + 3*vel_cart(i, j, k, 1) ) + vel_cart(i-1, j, k, 1) );
 
@@ -160,7 +160,7 @@ void convective_flux_calc_new_quick ( MultiFab& fluxTotal,
 
         amrex::ParallelFor(vbx,
                            [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-            conv_flux(i, j, k, 0) = ( uhalf_xface(i+1, j, k) - uhalf_xface(i, j, k) )/dx[0] + ( uhalf_yface(i, j+1, k) - uhalf_yface(i, j, k) )/dx[1] 
+            conv_flux(i, j, k, 0) = ( uhalf_xface(i+1, j, k) - uhalf_xface(i, j, k) )/dx[0] + ( uhalf_yface(i, j+1, k) - uhalf_yface(i, j, k) )/dx[1]
 #if (AMREX_SPACEDIM > 2)
                 + ( uhalf_zface(i, j, k+1) - uhalf_zface(i, j, k) )/dx[2];
 #else
@@ -401,8 +401,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
                             Array<MultiFab, AMREX_SPACEDIM>& velCont,
                             Vector<int> const& phy_bc_lo,
                             Vector<int> const& phy_bc_hi,
-                            Geometry const& geom,
-                            int const& n_cell )
+                            Geometry const& geom )
 {
     GpuArray<Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
     // UMIST (Upstream Monotonic Interpolation for Scalar Transport) is a scheme within the flux-limited method. (Lien and Leschziner, 1993)
@@ -420,7 +419,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
 
         auto const& vel_cart = velCart.array(mfi);
 
-        auto const& ucont = velCont[0].array(mfi); 
+        auto const& ucont = velCont[0].array(mfi);
         auto const& vcont = velCont[1].array(mfi);
 #if (AMREX_SPACEDIM > 2)
         auto const& wcont = velCont[2].array(mfi);
@@ -481,7 +480,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
                 vcart_UU = vcart_W;
                 vcart_U  = vcart_P;
                 vcart_D  = vcart_E;
-            } 
+            }
 #if (AMREX_SPACEDIM > 2)
             Real wcart_UU = wcart_EE;
             Real wcart_U  = wcart_E;
@@ -491,9 +490,9 @@ void convective_flux_calc ( MultiFab& fluxTotal,
                 wcart_UU = wcart_W;
                 wcart_U  = wcart_P;
                 wcart_D  = wcart_E;
-            } 
+            }
 #endif
-            
+
 #if (UMIST == 1)
             Real psi = Real(2.0);
             Real flux_limited_ratio = psi;
@@ -504,7 +503,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
             if ( vcart_D != vcart_U ) {
                 flux_limited_ratio = ( vcart_U - vcart_UU ) / ( vcart_D - vcart_U );
                 if ( flux_limited_ratio < 0) {
-                    // non-monotonic 
+                    // non-monotonic
                     vcart_xface(i, j, k) = vcart_U;
                 } else {
                     // monotonic
@@ -523,7 +522,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
             if ( wcart_D != wcart_U ) {
                 flux_limited_ratio = ( wcart_U - wcart_UU ) / ( wcart_D - wcart_U );
                 if ( flux_limited_ratio < 0) {
-                    // non-monotonic 
+                    // non-monotonic
                     wcart_xface(i, j, k) = wcart_U;
                 } else {
                     // monotonic
@@ -592,7 +591,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
             if ( ucart_D != ucart_U ) {
                 flux_limited_ratio = ( ucart_U - ucart_UU ) / ( ucart_D - ucart_U );
                 if ( flux_limited_ratio < 0) {
-                    // non-monotonic 
+                    // non-monotonic
                     ucart_yface(i, j, k) = ucart_U;
                 } else {
                     // monotonic
@@ -605,14 +604,14 @@ void convective_flux_calc ( MultiFab& fluxTotal,
                 //Print() << "flux_limited_ratio: " << flux_limited_ratio << "\n";
             }
 #endif
-            
+
 #if (AMREX_SPACEDIM > 2)
             wcart_yface(i, j, k) = - wcart_UU/8 + 3*wcart_U/4 + 3*wcart_D/8;
 #if (UMIST == 1)
             if ( wcart_D != wcart_U ) {
                 flux_limited_ratio = ( wcart_U - wcart_UU ) / ( wcart_D - wcart_U );
                 if ( flux_limited_ratio < 0) {
-                    // non-monotonic 
+                    // non-monotonic
                     wcart_yface(i, j, k) = wcart_U;
                 } else {
                     // monotonic
@@ -674,7 +673,7 @@ void convective_flux_calc ( MultiFab& fluxTotal,
 #else
             ;
 #endif
-            
+
 
             conv_flux(i, j, k, 1) = ( vcont(i, j+1, k) * vcont(i, j+1, k) - vcont(i, j, k) * vcont(i, j, k) )/( dx[1] ) + ( ucont(i+1, j, k) * vcart_xface(i+1, j, k) - ucont(i, j, k) * vcart_xface(i, j, k) )/( dx[0] )
             //conv_flux(i, j, k, 1) = ( ucont(i+1, j, k) * vcart_xface(i+1, j, k) - ucont(i, j, k) * vcart_xface(i, j, k) )/( dx[0] )
@@ -728,7 +727,7 @@ void viscous_flux_calc ( MultiFab& fluxTotal,
                 auto const& backMAC   = vel_cart(i  , j  , k+1, dir);
 #endif
 
-                visc_flux(i, j, k, dir) = ( (eastMAC - 2*centerMAC + westMAC)/(dx[0]*dx[0]) + (northMAC - 2*centerMAC + southMAC)/(dx[1]*dx[1]) )/ren 
+                visc_flux(i, j, k, dir) = ( (eastMAC - 2*centerMAC + westMAC)/(dx[0]*dx[0]) + (northMAC - 2*centerMAC + southMAC)/(dx[1]*dx[1]) )/ren
 #if (AMREX_SPACEDIM > 2)
                     + ( (backMAC - 2*centerMAC + frontMAC)/(dx[2]*dx[2]) )/ren;
 #else
@@ -771,14 +770,10 @@ void gradient_calc_approach1 ( MultiFab& fluxTotal,
                                MultiFab& cc_grad_phi,
                                MultiFab& userCtx,
                                Geometry const& geom,
-                               int const& Nghost,
-                               Vector<int> const& phy_bc_lo,
-                               Vector<int> const& phy_bc_hi,
-                               int const& n_cell )
+                               int const& PRESSURE_GRADIENT_APPROACH )
 {
     BL_PROFILE_VAR("gradient_calc_approach1()", gradient_calc_approach1);
 
-    //enforce_wall_bcs_for_cell_centered_userCtx_on_ghost_cells(userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
     GpuArray<Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
 
 #ifdef AMREX_USE_OMP
@@ -800,36 +795,34 @@ void gradient_calc_approach1 ( MultiFab& fluxTotal,
             compute_phi_gradient_periodic(i, j, k, phi_grad, dx, ctx);
         });
     }
-    
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-	for (MFIter mfi(fluxTotal); mfi.isValid(); ++mfi)
-	{
-		const Box& vbx = mfi.validbox();
-		auto const& total_flux = fluxTotal.array(mfi);
-		auto const& prs_grad = fluxPrsGrad.array(mfi);
 
-		amrex::ParallelFor(vbx,
-						   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-			for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
-				total_flux(i, j, k, dir) = - prs_grad(i, j, k, dir);
-			}
-		});
-	}
+    if (PRESSURE_GRADIENT_APPROACH == 1) {
+        #ifdef AMREX_USE_OMP
+        #pragma omp parallel if (Gpu::notInLaunchRegion())
+        #endif
+        for (MFIter mfi(fluxTotal); mfi.isValid(); ++mfi)
+        {
+            const Box& vbx = mfi.validbox();
+            auto const& total_flux = fluxTotal.array(mfi);
+            auto const& prs_grad = fluxPrsGrad.array(mfi);
 
-    //enforce_wall_bcs_for_cell_centered_flux_on_ghost_cells(cc_grad_phi, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-
+            amrex::ParallelFor(vbx,
+                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
+                    total_flux(i, j, k, dir) = - prs_grad(i, j, k, dir);
+                }
+            });
+        }
+        //amrex::Print() << "INFO| Pressure Gradient is calculated at cell-centres and added to the total flux. \n";
+    } else if (PRESSURE_GRADIENT_APPROACH == 2) {
+        //amrex::Print() << "INFO| Pressure Gradient is calculated at face-centres and added to the momentum RHS. \n";
+    }
 }
 
 void gradient_calc_approach2 ( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
                                Array<MultiFab, AMREX_SPACEDIM>& array_grad_phi,
                                MultiFab& userCtx,
-                               Geometry const& geom,
-                               int const& Nghost,
-                               Vector<int> const& phy_bc_lo,
-                               Vector<int> const& phy_bc_hi,
-                               int const& n_cell )
+                               Geometry const& geom )
 {
     BL_PROFILE_VAR("gradient_calc_approach2()", gradient_calc_approach2);
 
@@ -846,20 +839,6 @@ void gradient_calc_approach2 ( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
 #if (AMREX_SPACEDIM > 2)
 		const Box& zbx = mfi.tilebox(IntVect(AMREX_D_DECL(0,0,1)));
 #endif
-
-		auto const& west_wall_bcs = phy_bc_lo[0]; // west wall
-		auto const& east_wall_bcs = phy_bc_hi[0]; // east wall
-
-		auto const& south_wall_bcs = phy_bc_lo[1]; // south wall
-		auto const& north_wall_bcs = phy_bc_hi[1]; // north wall
-#if (AMREX_SPACEDIM > 2)
-		auto const& fron_wall_bcs = phy_bc_lo[2]; // front wall
-		auto const& back_wall_bcs = phy_bc_hi[2]; // back wall
-#endif
-		//amrex::Print() << "West wall bc = " << west_wall_bcs << "\n";
-		//amrex::Print() << "East wall bc = " << east_wall_bcs << "\n";
-		//amrex::Print() << "South wall bc = " << south_wall_bcs << "\n";
-		//amrex::Print() << "North wall bc = " << north_wall_bcs << "\n";
 
 		auto const& grad_p_x = array_grad_p[0].array(mfi);
 		auto const& grad_p_y = array_grad_p[1].array(mfi);
@@ -878,7 +857,7 @@ void gradient_calc_approach2 ( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
 		// Avoiding boundary face-centered gradients
 		int lo = dom.smallEnd(0);
 		int hi = dom.bigEnd(0)+1;
-        
+
 		amrex::ParallelFor(xbx,
  								 [=] AMREX_GPU_DEVICE (int i, int j, int k){
 			grad_p_x(i, j, k) = ( ctx(i, j, k, 0) - ctx(i-1, j, k, 0) )/dx[0];

@@ -2,10 +2,10 @@
 AMREX_HOME ?= ../../../../../amrex
 
 USE_MPI      = TRUE
-MPI_THREAD_MULTIPLE = TRUE  # amrex.async_out=1 with more than 64 processes requires MPI_THREAD_MULTIPLE
+MPI_THREAD_MULTIPLE = FALSE  # amrex.async_out=1 with more than 64 processes requires MPI_THREAD_MULTIPLE
 USE_OMP      = FALSE
 USE_HYPRE    = FALSE
-USE_CUDA     = FALSE
+USE_CUDA     = TRUE
 COMP         = gnu
 DIM          = 3
 
@@ -13,9 +13,19 @@ DEBUG        = FALSE
 TINY_PROFILE = TRUE
 PROFILE      = FALSE
 
+#FORT_CPP = cpp -E -traditional-cpp -P -x c
+BL_NO_FORT   = TRUE
+
 #EBASE = myDEBUG
 
+# On NixOS, CUDA is split across Nix store packages.
+# Find the merged package (has both include/ and lib/) via glob — faster than find.
+CUDA_PATH := $(shell ls -d /nix/store/*-cuda-merged-* 2>/dev/null | grep -vE '(\.drv|_[a-z])' | head -1)
+
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
+
+# NixOS uses lib/ not lib64/ — add it so the linker finds libcudart etc.
+LIBRARY_LOCATIONS += $(CUDA_PATH)/lib
 
 #include ../Source/src1/Make.package
 #VPATH_LOCATIONS  += ../Source/src1

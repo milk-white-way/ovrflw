@@ -53,9 +53,9 @@ void poisson_advance( MultiFab& poisson_sol,
  * (I - div dt grad) phi^{n+1} = phi^n
 */
     bool semicoarsening = false;
-    int semicoarsening_direction = 1;
+    int semicoarsening_direction = 0;
     int semicoarsening_level = 1;
-    // int max_coarsening_level = 0;
+    //int max_coarsening_level = 0;
 
     bool use_hypre = false;
 
@@ -189,31 +189,17 @@ void poisson_advance( MultiFab& poisson_sol,
 //-- Update the pressure and velocity field---
 //-- After the projection step ---------------
 //++++++++++++++++++++++++++++++++++++++++++++
-void update_solution( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
-                      Array<MultiFab, AMREX_SPACEDIM>& array_grad_phi,
-                      MultiFab& fluxPrsGrad,
-                      MultiFab& cc_grad_phi,
-                      MultiFab& poisson_rhs,
-                      MultiFab& userCtx,
+void update_solution( MultiFab& userCtx,
                       MultiFab& velCart,
+                      Array<MultiFab, AMREX_SPACEDIM>& array_grad_phi,
                       Array<MultiFab, AMREX_SPACEDIM>& velCont,
                       Array<MultiFab, AMREX_SPACEDIM>& velStar,
                       Geometry const& geom,
-					  Real& time,
-                      Real const& dt,
-                      const int& Nghost,
-                      Vector<int> const& phy_bc_lo,
-                      Vector<int> const& phy_bc_hi,
-                      Vector<amrex::Real> const& inflow_waveform,
-                      const int& n_cell,
-                      Real const& ren )
+                      Real const& dt )
 {
     Box dom(geom.Domain());
     GpuArray<Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
     GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-
-    //gradient_calc_approach1(fluxTotal, fluxPrsGrad, cc_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
-    gradient_calc_approach2(array_grad_p, array_grad_phi, userCtx, geom, Nghost, phy_bc_lo, phy_bc_hi, n_cell);
 
     //==============================================
     //----- Update the contravariant velocity ------
@@ -263,8 +249,6 @@ void update_solution( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
         });
 #endif
     } // End of the loop for boxes
-    // Update velCart from the velCont solutions
-    cont2cart(velCart, velCont, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
     /*
     amrex::Print() << "DEBUG| Calculated the updated contravariant velocity \n";
 #ifdef AMREX_USE_OMP
@@ -291,9 +275,9 @@ void update_solution( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
         });
     }
     */
-    //==============================================
-    //----- Update the pressure field --------------
-    //----------------------------------------------
+    //>============================================>
+    //|------- Update the pressure field ----------|
+    //<============================================<
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -301,7 +285,7 @@ void update_solution( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
     {
         const Box& vbx = mfi.validbox();
         auto const& ctx = userCtx.array(mfi);
-        auto const& grad_u = poisson_rhs.array(mfi);
+        //auto const& grad_u = poisson_rhs.array(mfi);
 
         amrex::ParallelFor(vbx,
                            [=] AMREX_GPU_DEVICE (int i, int j, int k){
@@ -309,84 +293,4 @@ void update_solution( Array<MultiFab, AMREX_SPACEDIM>& array_grad_p,
             ctx(i, j, k, 0) = ctx(i, j, k, 0) + ctx(i, j, k, 1); // - ( dt * grad_u(i, j, k, 0) )/Real(1.5)/ren;
         });
     } // End of the loop for boxes
-    userCtx.FillBoundary(geom.periodicity());
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-	for (MFIter mfi(userCtx); mfi.isValid(); ++mfi)
-	{
-		const Box& vbx = mfi.growntilebox(1);
-		auto const& ctx = userCtx.array(mfi);
-
-		int lo = dom.smallEnd(0); //amrex::Print() << lo << "\n";
-		int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
-
-		if (vbx.smallEnd(0) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( i < lo ) {
-					ctx(i, j, k, 0) = ctx(-i - 1, j, k, 0);
-					ctx(i, j, k, 1) = ctx(-i - 1, j, k, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(0) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( i > hi ) {
-					ctx(i, j, k, 0) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 0);
-					ctx(i, j, k, 1) = ctx(((n_cell - i) + (n_cell - 1)), j, k, 1);
-				}
-			});
-		}
-
-		lo = dom.smallEnd(1);
-		hi = dom.bigEnd(1);
-
-		if (vbx.smallEnd(1) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( j < lo ) {
-					ctx(i, j, k, 0) = ctx(i, -j - 1, k, 0);
-					ctx(i, j, k, 1) = ctx(i, -j - 1, k, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(1) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( j > hi ) {
-					ctx(i, j, k, 0) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-					ctx(i, j, k, 1) = ctx(i, ((n_cell - j) + (n_cell - 1)), k, 1);
-				}
-			});
-		}
-
-#if (AMREX_SPACEDIM > 2)
-		lo = dom.smallEnd(2);
-		hi = dom.bigEnd(2);
-
-		if (vbx.smallEnd(2) < lo) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( k < lo ) {
-					ctx(i, j, k, 0) = ctx(i, j, -k - 1, 0);
-					ctx(i, j, k, 1) = ctx(i, j, -k - 1, 1);
-				}
-			});
-		}
-
-		if (vbx.bigEnd(2) > hi) {
-			amrex::ParallelFor(vbx,
-							   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-				if ( k > hi ) {
-					ctx(i, j, k, 0) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-					ctx(i, j, k, 1) = ctx(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-				}
-			});
-		}
-#endif
-	}
 }

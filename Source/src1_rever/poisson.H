@@ -25,21 +25,10 @@ void poisson_advance (amrex::MultiFab& poisson_sol,
 
 void init_phi (amrex::MultiFab& phi);
 
-void update_solution (amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& array_grad_p,
-                      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& array_grad_phi,
-                      amrex::MultiFab& fluxPrsGrad,
-                      amrex::MultiFab& cc_grad_phi,
-                      amrex::MultiFab& poisson_rhs,
-                      amrex::MultiFab& userCtx,
+void update_solution (amrex::MultiFab& userCtx,
                       amrex::MultiFab& velCart,
+                      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& array_grad_phi,
                       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& velCont,
                       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& velStar,
                       amrex::Geometry const& geom,
-					  amrex::Real& time, 
-                      amrex::Real const& dt,
-                      int const& Nghost,
-                      amrex::Vector<int> const& phy_bc_lo,
-                      amrex::Vector<int> const& phy_bc_hi,
-                      amrex::Vector<amrex::Real> const& inflow_waveform,
-                      int const& n_cell,
-                      amrex::Real const& ren);
+                      amrex::Real const& dt);

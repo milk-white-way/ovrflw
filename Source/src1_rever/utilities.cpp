@@ -19,9 +19,9 @@ void cont2cart(MultiFab &velCart,
                int const &Nghost,
                Vector<int> const &phy_bc_lo,
                Vector<int> const &phy_bc_hi,
-			   Vector<amrex::Real> const& inflow_waveform,
+			   GpuArray<amrex::Real, AMREX_SPACEDIM> inflow_waveform,
 			   Real &time,
-               int const &n_cell) {
+               Vector<int> const &n_cell) {
 	BL_PROFILE_VAR("cont2cart()", cont2cart);
 
     Box dom(geom.Domain());
@@ -35,6 +35,13 @@ void cont2cart(MultiFab &velCart,
 #endif
     for (MFIter mfi(velCart); mfi.isValid(); ++mfi) {
       	const Box &vbx = mfi.validbox();
+
+       int const nxcell = n_cell[0];
+       int const nycell = n_cell[1];
+#if (AMREX_SPACEDIM > 2)
+       int const nzcell = n_cell[2];
+#endif
+
       	auto const &vel_cart = velCart.array(mfi);
 
       	auto const &vel_cont_x = velCont[0].array(mfi);
@@ -59,15 +66,22 @@ void cont2cart(MultiFab &velCart,
     // -- periodic: 111
     velCart.FillBoundary(geom.periodicity());
     // Step 2: Physical BCs
-    // -- wall: 135 (no-slip), -135 (slip)
-    // -- inlet: 165 (constant velocity), -165 (time-dependent velocity)
-    // -- outlet: 195 (constant velocity), -195 (time-dependent velocity)
+    // -- wall: 131 (no-slip), -131 (slip)
+    // -- inlet: 151 (constant velocity), -151 (time-dependent velocity)
+    // -- outlet: 171 (constant velocity), -171 (time-dependent velocity)
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
    	for (MFIter mfi(velCart); mfi.isValid(); ++mfi) {
       	const Box &vbx = mfi.growntilebox(Nghost);
       	auto const &vel_cart = velCart.array(mfi);
+
+       int const nxcell = n_cell[0];
+       int const nycell = n_cell[1];
+#if (AMREX_SPACEDIM > 2)
+       int const nzcell = n_cell[2];
+#endif
 
 		auto const &west_wall_bcs = phy_bc_lo[0]; 	// west wall
 		auto const &east_wall_bcs = phy_bc_hi[0]; 	// east wall
@@ -89,7 +103,7 @@ void cont2cart(MultiFab &velCart,
 
 		// Ghost cells to the left (of the West wall)
 		if (vbx.smallEnd(0) < lo) {
-			if (west_wall_bcs == 135) {
+			if (west_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
                                	   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i < lo) {
@@ -98,85 +112,84 @@ void cont2cart(MultiFab &velCart,
 						}
 					}
 				});
-			} else if (west_wall_bcs == -135) {
+			} else if (west_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
-	 							   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i < lo) {
 						vel_cart(i, j, k, 0) = -vel_cart(-i - 1, j, k, 0);
-						vel_cart(i, j, k, 1) = vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = vel_cart(-i - 1, j, k, 2);
-#endif
+						for (int dir = 1; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = vel_cart(-i - 1, j, k, dir);
+						}
 					}
 				});
-			} else if (west_wall_bcs == 165) {
+			} else if (west_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
-								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+							       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i < lo) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(-i - 1, j, k, 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = 2 - vel_cart(-i - 1, j, k, 2);
-#endif
+					    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = 2*inflow_waveform[dir] - vel_cart(-i - 1, j, k, dir);
+					    }
 					}
 				});
-			} else if (west_wall_bcs == -165) {
-				amrex::ParallelFor(vbx,
-								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			} else if (west_wall_bcs == -151) {
+				amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (west_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+							       [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i < lo) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(-i - 1, j, k, 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(-i - 1, j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = 2 - vel_cart(-i - 1, j, k, 2);
-#endif
+						for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = vel_cart(-i - 1, j, k, dir);
+						}
 					}
 				});
-			} else if (west_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
-			} else if (west_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			} else if (west_wall_bcs == -171) {
+				amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 
 		// Ghost cells to the right (of the East wall)
 		if (vbx.bigEnd(0) > hi) {
-			if (east_wall_bcs == 135) {
+			if (east_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i > hi) {
 						for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-							vel_cart(i, j, k, dir) = -vel_cart(((n_cell - i) + (n_cell - 1)), j, k, dir);
+							vel_cart(i, j, k, dir) = -vel_cart(((nxcell - i) + (nxcell - 1)), j, k, dir);
 						}
 					}
 				});
-			} else if (east_wall_bcs == 1) {
+			} else if (east_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i > hi) {
-						vel_cart(i, j, k, 0) = -vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 0);
-						vel_cart(i, j, k, 1) = vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 2);
-#endif
+					    vel_cart(i, j, k, 0) = -vel_cart(((nxcell - i) + (nxcell - 1)), j, k, 0);
+						for (int dir = 1; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = vel_cart(((nxcell - i) + (nxcell - 1)), j, k, dir);
+						}
 					}
 				});
-			} else if (east_wall_bcs == 165) {
+			} else if (east_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (i > hi) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 1);
-#if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = 2 - vel_cart(((n_cell - i) + (n_cell - 1)), j, k, 2);
-#endif
+					    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = 2*inflow_waveform[dir] - vel_cart(((nxcell - i) + (nxcell - 1)), j, k, dir);
+						}
 					}
 				});
-			} else if (east_wall_bcs == -165) {
-				amrex::Abort("Not yet implemented");
-			} else if (east_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
-			} else if (east_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			} else if (east_wall_bcs == -151) {
+			    amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (east_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                    if (i > hi) {
+                        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                            vel_cart(i, j, k, dir) = vel_cart(((nxcell - i) + (nxcell - 1)), j, k, dir);
+                        }
+                    }
+                });
+			} else if (east_wall_bcs == -171) {
+			    amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 
@@ -185,7 +198,7 @@ void cont2cart(MultiFab &velCart,
 
 		// Ghost cells to the bottom (of the South wall)
 		if (vbx.smallEnd(1) < lo) {
-			if (south_wall_bcs == 135) {
+			if (south_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j < lo) {
@@ -194,9 +207,9 @@ void cont2cart(MultiFab &velCart,
 						}
 					}
 				});
-			} else if (south_wall_bcs == -135) {
+			} else if (south_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
-										 [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j < lo) {
 						vel_cart(i, j, k, 0) = vel_cart(i, -j - 1, k, 0);
 						vel_cart(i, j, k, 1) = -vel_cart(i, -j - 1, k, 1);
@@ -205,66 +218,79 @@ void cont2cart(MultiFab &velCart,
 #endif
 					}
 				});
-			} else if (south_wall_bcs == 165) {
+			} else if (south_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
-										 [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j < lo) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(i, -j - 1, k, 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(i, -j - 1, k, 1);
+						vel_cart(i, j, k, 0) = inflow_x - vel_cart(i, -j - 1, k, 0);
+						vel_cart(i, j, k, 1) = inflow_y - vel_cart(i, -j - 1, k, 1);
 #if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = 2 - vel_cart(i, -j - 1, k, 2);
+						vel_cart(i, j, k, 2) = inflow_z - vel_cart(i, -j - 1, k, 2);
 #endif
 					}
 				});
-			} else if (south_wall_bcs == -165) {
-				amrex::Abort("Not yet implemented");
-			} else if (south_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
-			} else if (south_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			} else if (south_wall_bcs == -151) {
+				amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (south_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+					if (j < lo) {
+						for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+							vel_cart(i, j, k, dir) = 2*inflow_waveform[dir] - vel_cart(i, -j - 1, k, dir);
+						}
+					}
+				});
+			} else if (south_wall_bcs == -171) {
+				amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 
 		// Ghost cells to the top (of the North wall)
-		// IMPORTANT: CURRENTLY SET TO LID-DRIVEN CAVITY
 		if (vbx.bigEnd(1) > hi) {
-			if (north_wall_bcs == 135) {
+			if (north_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j > hi) {
 						for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-							vel_cart(i, j, k, dir) = -vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, dir);
+							vel_cart(i, j, k, dir) = -vel_cart(i, ((nycell - j) + (nycell - 1)), k, dir);
 						}
 					}
 				});
-			} else if (north_wall_bcs == -135) {
+			} else if (north_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j > hi) {
-						vel_cart(i, j, k, 0) = vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-						vel_cart(i, j, k, 1) = -vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 1);
+						vel_cart(i, j, k, 0) = vel_cart(i, ((nycell - j) + (nycell -  1)), k, 0);
+						vel_cart(i, j, k, 1) = -vel_cart(i, ((nycell - j) + (nycell - 1)), k, 1);
 #if (AMREX_SPACEDIM > 2)
-						vel_cart(i, j, k, 2) = vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 2);
+						vel_cart(i, j, k, 2) = vel_cart(i, ((nycell - j) + (nycell - 1)), k, 2);
 #endif
 					}
 				});
-			} else if (north_wall_bcs == 165) {
+			} else if (north_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (j > hi) {
-							vel_cart(i, j, k, 0) = 2*inflow_x - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 0);
-							vel_cart(i, j, k, 1) = 2*inflow_y - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 1);
+							vel_cart(i, j, k, 0) = 2*inflow_x - vel_cart(i, ((nycell - j) + (nycell - 1)), k, 0);
+							vel_cart(i, j, k, 1) = 2*inflow_y - vel_cart(i, ((nycell - j) + (nycell - 1)), k, 1);
 #if (AMREX_SPACEDIM > 2)
-							vel_cart(i, j, k, 2) = 2*inflow_z - vel_cart(i, ((n_cell - j) + (n_cell - 1)), k, 2);
+							vel_cart(i, j, k, 2) = 2*inflow_z - vel_cart(i, ((nycell - j) + (nycell - 1)), k, 2);
 #endif
 					}
 				});
-			} else if (north_wall_bcs == -165) {
-				amrex::Abort("Not yet implemented");
-			} else if (north_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
-			} else if (north_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			} else if (north_wall_bcs == -151) {
+			    amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (north_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                    if (j > hi) {
+                        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                            vel_cart(i, j, k, dir) = vel_cart(i, ((nycell - j) + (nycell - 1)), k, dir);
+                        }
+                    }
+                });
+			} else if (north_wall_bcs == -171) {
+				amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 
@@ -273,7 +299,7 @@ void cont2cart(MultiFab &velCart,
 		hi = dom.bigEnd(2);
 
 		if (vbx.smallEnd(2) < lo) {
-			if (bakward_wall_bcs == 135) {
+			if (bakward_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k < lo) {
@@ -282,67 +308,81 @@ void cont2cart(MultiFab &velCart,
 						}
 					}
 				});
-			} else if (bakward_wall_bcs == -135) {
+			} else if (bakward_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k < lo) {
-						vel_cart(i, j, k, 0) = vel_cart(i, j, -k -1, 0);
-						vel_cart(i, j, k, 1) = vel_cart(i, j, -k -1, 1);
+					    vel_cart(i, j, k, 0) = vel_cart(i, j, -k -1, 0);
+					    vel_cart(i, j, k, 1) = vel_cart(i, j, -k -1, 1);
 						vel_cart(i, j, k, 2) = -vel_cart(i, j, -k -1, 2);
 					}
 				});
-			} else if (bakward_wall_bcs == 165) {
+			} else if (bakward_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k < lo) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(i, j, -k -1, 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(i, j, -k -1, 1);
-						vel_cart(i, j, k, 2) = 2 - vel_cart(i, j, -k -1, 2);
+					    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                            vel_cart(i, j, k, dir) = 2*inflow_waveform[dir] - vel_cart(i, j, -k -1, dir);
+                        }
 					}
 				});
-			} else if (bakward_wall_bcs == -165) {
-				amrex::Abort("Not yet implemented");
-			} else if (bakward_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
+			} else if (bakward_wall_bcs == -151) {
+			    amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (bakward_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                    if (k < lo) {
+                        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                            vel_cart(i, j, k, dir) = vel_cart(i, j, -k -1, dir);
+                        }
+                    }
+                });
 			} else if (bakward_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			    amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 
 		if (vbx.bigEnd(2) > hi) {
-			if (forward_wall_bcs == 135) {
+			if (forward_wall_bcs == 131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k > hi) {
 						for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-							vel_cart(i, j, k, dir) = -vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), dir);
+							vel_cart(i, j, k, dir) = -vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), dir);
 						}
 					}
 				});
-			} else if (forward_wall_bcs == -135) {
+			} else if (forward_wall_bcs == -131) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k > hi)	{
-						vel_cart(i, j, k, 0) = vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-						vel_cart(i, j, k, 1) = vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-						vel_cart(i, j, k, 2) = -vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 2);
+						vel_cart(i, j, k, 0) = vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 0);
+						vel_cart(i, j, k, 1) = vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 1);
+						vel_cart(i, j, k, 2) = -vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 2);
 					}
 				});
-			} else if (forward_wall_bcs == 165) {
+			} else if (forward_wall_bcs == 151) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					if (k > hi) {
-						vel_cart(i, j, k, 0) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 0);
-						vel_cart(i, j, k, 1) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 1);
-						vel_cart(i, j, k, 2) = 2 - vel_cart(i, j, ((n_cell - k) + (n_cell - 1)), 2);
+						vel_cart(i, j, k, 0) = 2 - vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 0);
+						vel_cart(i, j, k, 1) = 2 - vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 1);
+						vel_cart(i, j, k, 2) = 2 - vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), 2);
 					}
 				});
-			} else if (forward_wall_bcs == -165) {
-				amrex::Abort("Not yet implemented");
-			} else if (forward_wall_bcs == 195) {
-				amrex::Abort("Not yet implemented");
-			} else if (forward_wall_bcs == -195) {
-				amrex::Abort("Not yet implemented");
+			} else if (forward_wall_bcs == -151) {
+				amrex::Abort("WARNING| The time-dependent inflow boundary condition is not yet implemented. Aborting! \n");
+			} else if (forward_wall_bcs == 171) {
+			    amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                    if (k > hi)	{
+                        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                            vel_cart(i, j, k, dir) = vel_cart(i, j, ((nzcell - k) + (nzcell - 1)), dir);
+                        }
+                    }
+                });
+			} else if (forward_wall_bcs == -171) {
+				amrex::Abort("WARNING| The time-dependent outflow boundary condition is not yet implemented. Aborting! \n");
 			}
 		}
 #endif
@@ -365,10 +405,10 @@ void shift_face_to_center(MultiFab &cell_centre,
 #endif
         amrex::ParallelFor(vbx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-                               cc(i, j, k, 0) = cf_x(i + 1, j, k);
-                               cc(i, j, k, 1) = cf_y(i, j + 1, k);
+            cc(i, j, k, 0) = cf_x(i + 1, j, k);
+            cc(i, j, k, 1) = cf_y(i, j + 1, k);
 #if (AMREX_SPACEDIM > 2)
-                               cc(i, j, k, 2) = cf_z(i, j, k + 1);
+            cc(i, j, k, 2) = cf_z(i, j, k + 1);
 #endif
          });
     }
@@ -471,7 +511,7 @@ amrex::Real Error_Computation(Array<MultiFab, AMREX_SPACEDIM> &velCont,
 
 #if (AMREX_SPACEDIM > 2)
         amrex::ParallelFor(zbx,
-                           [=] AMREX_GPU_DEVICE(int i, int j, int k) {	
+                           [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			zdiff(i, j, k) = zprev(i, j, k) - znext(i, j, k);
 		});
 #endif
@@ -809,7 +849,7 @@ void SaveCheckpoint(BoxArray const& ba,
 	edge_ba.surroundingNodes(0);
 	MultiFab vel_xCont(edge_ba, dm, Ncomp, Nghost);
 	MultiFab vel_xContPrev(edge_ba, dm, Ncomp, Nghost);
-		
+
 	edge_ba = ba;
 	edge_ba.surroundingNodes(1);
 	MultiFab vel_yCont(edge_ba, dm, Ncomp, Nghost);
@@ -832,7 +872,7 @@ void SaveCheckpoint(BoxArray const& ba,
 	MultiFab::Copy(vel_zCont, velCont[2], 0, 0, 1, 0);
 	MultiFab::Copy(vel_zContPrev, velContPrev[2], 0, 0, 1, 0);
 #endif
-	
+
 	// checkpoint file name, e.g., chk00010
 	const std::string& checkpointname = Concatenate("checkpoint", chk_in, 5);
 
@@ -953,14 +993,14 @@ void LoadCheckpoint(BoxArray& ba,
 		// create a distribution mapping
 		dm_from_ckpt.define(ba_from_ckpt, ParallelDescriptor::NProcs());
 
-		// define checkpoint+solver flow fields 
+		// define checkpoint+solver flow fields
 		pressure.define(ba_from_ckpt, dm_from_ckpt, Ncomp, Nghost);
 
 		edge_ba = ba_from_ckpt;
 		edge_ba.surroundingNodes(0);
 		vel_xCont.define(edge_ba, dm_from_ckpt, Ncomp, Nghost);
 		vel_xContPrev.define(edge_ba, dm_from_ckpt, Ncomp, Nghost);
-		
+
 		edge_ba = ba_from_ckpt;
 		edge_ba.surroundingNodes(1);
 		vel_yCont.define(edge_ba, dm_from_ckpt, Ncomp, Nghost);
@@ -985,7 +1025,7 @@ void LoadCheckpoint(BoxArray& ba,
 	VisMF::Read(vel_zContPrev, MultiFabFileFullPrefix(0, checkpointname, "Level_", "vel_zContPrev"));
 #endif
 
-	// print debugging MultiFab content	
+	// print debugging MultiFab content
 	/*
 	for ( MFIter mfi(vel_xCont); mfi.isValid(); ++mfi )
 	{

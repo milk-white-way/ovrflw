@@ -18,8 +18,7 @@ void runge_kutta4_pseudo_time_stepping (const GpuArray<Real,MAX_RK_ORDER>& rk,
                                         int const& Nghost,
                                         Vector<int> const& phy_bc_lo,
                                         Vector<int> const& phy_bc_hi,
-                                        Vector<amrex::Real> const& inflow_waveform,
-                                        int const& n_cell,
+                                        GpuArray<amrex::Real, AMREX_SPACEDIM> inflow_waveform,
                                         Real& time,
                                         Real const& dt)
 {
@@ -65,17 +64,17 @@ void runge_kutta4_pseudo_time_stepping (const GpuArray<Real,MAX_RK_ORDER>& rk,
         auto const &vel_cont_prev_z = velContPrev[2].array(mfi);
 #endif
 
-        amrex::ParallelFor(xbx, 
+        amrex::ParallelFor(xbx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
             xrhs(i, j, k) = xrhs(i, j, k) - ( Real(1.5)/dt )*( vel_star_x(i, j, k) - vel_cont_prev_x(i, j, k) ) + ( Real(0.5)/dt )*vel_cont_diff_x(i, j, k);
 
             vel_star_x(i, j, k) = vel_cont_x(i, j, k) + ( rk[sub] * xrhs(i, j, k) );
         });
-        
+
         amrex::ParallelFor(ybx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
             yrhs(i, j, k) = yrhs(i, j, k) - ( Real(1.5)/dt )*( vel_star_y(i, j, k) - vel_cont_prev_y(i, j, k) ) + ( Real(0.5)/dt )*vel_cont_diff_y(i, j, k);
-                        
+
             vel_star_y(i, j, k) = vel_cont_y(i, j, k) + ( rk[sub] * yrhs(i, j, k) );
         });
 #if (AMREX_SPACEDIM > 2)
@@ -87,10 +86,6 @@ void runge_kutta4_pseudo_time_stepping (const GpuArray<Real,MAX_RK_ORDER>& rk,
         });
 #endif
     }
-    // ------------------ CONVERT Ucont^{*,l} => Ucart^{*,l} ------------------
-    //shift_face_to_center(velCart, velStar);
-    //WriteSingleLevelPlotfile("pltIntermediateVel", velCart, {"u-star", "v-star"}, geom, 0, 0);
-    cont2cart(velCart, velStar, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
 }
 
 void explicit_time_marching (Array<MultiFab, AMREX_SPACEDIM>& momentum_rhs,
@@ -126,7 +121,7 @@ void explicit_time_marching (Array<MultiFab, AMREX_SPACEDIM>& momentum_rhs,
         auto const& vel_cont_diff_z = velContDiff[2].array(mfi);
 #endif
 
-        amrex::ParallelFor(xbx, 
+        amrex::ParallelFor(xbx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
             xrhs(i, j, k) = xrhs(i, j, k) + ( Real(1.0)/( Real(2.0)*dt ) )*vel_cont_diff_x(i, j, k);
         });
@@ -168,7 +163,7 @@ void explicit_time_marching (Array<MultiFab, AMREX_SPACEDIM>& momentum_rhs,
         auto const &vel_star_z = velStar[2].array(mfi);
 #endif
 
-        amrex::ParallelFor(xbx, 
+        amrex::ParallelFor(xbx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
             vel_star_x(i, j, k) = vel_star_x(i, j, k) + ( ( dt/Real(1.5) )*xrhs(i, j, k) );
 
@@ -177,7 +172,7 @@ void explicit_time_marching (Array<MultiFab, AMREX_SPACEDIM>& momentum_rhs,
 			//amrex::Print() << x << ";" << y << ";" << vel_star_x(i, j, k) << "\n";
             //amrex::Print() << "DEBUG | (i, j) = (" << i << ", " << j << ") | vel_star_x = " << vel_star_x(i, j, k) << "\n";
         });
-        
+
         amrex::ParallelFor(ybx,
                            [=] AMREX_GPU_DEVICE(int i, int j, int k) {
             vel_star_y(i, j, k) = vel_star_y(i, j, k) + ( ( dt/Real(1.5) )*yrhs(i, j, k) );

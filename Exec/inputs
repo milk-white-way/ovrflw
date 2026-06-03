@@ -1,15 +1,62 @@
-nsteps = 11
-n_cell = 32
+# USER INPUTS
+#----- dimensions of physical domain -------
+lo_phy_dim = -3.14159265359 -3.14159265359 -3.14159265359
+hi_phy_dim = 3.14159265359 3.14159265359 3.14159265359
+#-------------------------------------------
 
+#----- specify computational grid ----------
+n_cell = 64 64 64
 max_grid_size_x = 32
-max_grid_size_y = 16
-max_grid_size_z = 16
+max_grid_size_y = 32
+max_grid_size_z = 32
+#-------------------------------------------
 
-fixed_dt = 1.0e-3
+#----- temporal settings -------------------
+fixed_dt = 2.0e-3
+nsteps = 10000
+#-------------------------------------------
 
-plot_int = -10
-chk_int = = 10
-chk_out = 10
+#----- fluid properties --------------------
+ren = 1
+vis = 1
+#-------------------------------------------
+
+#----- output settings ---------------------
+plot_int = 100
+chk_int = 100
+chk_out = -10
+#-------------------------------------------
+
+# ----- boundary conditions ----------------
+# --- periodic: 111
+# --- wall: 131 (no-slip) ; -131 (slip)
+# --- inlet: 151 (constant velocity) ;
+# --- outlet: 171 (constant velocity) ;
+phy_bc_lo = 111 111 111
+phy_bc_hi = 111 111 111
+# only if inlet is prescribed => (u, v, w) 
+inflow_waveform = 0.0 1.0 0.0
+
+# ----- initial conditions -----------------
+# Can be either "static" (default) or "dynamic"
+# --- "static" template ---
+# ic_type = static           
+#
+# For ic_type = static:
+# ic_velocity_static  = 0.0 0.0 0.0    # u v w
+# ic_pressure_static  = 0.0
+#
+# For ic_type = dynamic (math expressions in x, y, z):
+# --- "dynamic" template ---
+ic_type = dynamic
+ic_velocity_x_expr  = "sin(x)*cos(y)*cos(z)*exp(-2.0*t)"
+ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*t)"
+ic_velocity_z_expr  = "0"
+ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
+#
+# --- flag to check init before running  ---
+stop_after_init = 0 # set to 1 to write pltInitCheck and exit
+#-------------------------------------------
 
 PSEUDO_TIMESTEPPING = 1
 
@@ -20,18 +67,6 @@ cfl = 3
 
 IterNum = 100
 
-ren = 100
-vis = 1
-
-# phy_bc params declare the type of wall
-# -- periodic: 111
-# -- wall: 135 (no-slip) ; -135 (slip)
-# -- inlet: 165 (constant velocity) ; -165 (time-dependent velocity)
-# -- outlet: 192 (constant velocity) ; -195 (time-dependent velocity)
-phy_bc_lo = 135 135 135
-phy_bc_hi = 135 165 135
-
-inflow_waveform = 1.0 0.0 0.0
-
 amrex.v = 1
 amrex.async_out = 0  # If we use more than 64 processes, async_out will require MPI_THREAD_MULTIPLE
+
