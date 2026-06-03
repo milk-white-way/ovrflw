@@ -1,4 +1,5 @@
-# OvrFlw <sub>E0 (Edition One)</sub>
+# OvrFlw
+*E0 · Edition One*
 
 > Previously: AMReX-based Exascale Simulation Software for Incompressible Flows (AMRESSIF)
 
@@ -75,6 +76,48 @@ mpirun -np 4 ./main3d.gnu.TPROF.MPI.ex inputs
 ```
 
 All simulation parameters are read from the `inputs` file at runtime — no recompilation needed to change resolution, time step, boundary conditions, or initial conditions.
+
+---
+
+## Getting started
+
+Two self-contained 2D benchmarks live in `Tests/`. Each folder has its own `GNUmakefile` and `inputs`; build and output stay local to the folder.
+
+### 2D Taylor-Green Vortex
+
+Verifies temporal accuracy and periodic boundary conditions against the exact analytical solution (Re = 1, ν = 1, 100 steps).
+
+```bash
+cd Tests/tgv_2d
+make -j4
+mpirun -np 4 ./tgv2d.gnu.TPROF.MPI.ex inputs
+python ../compare.py --case tgv --pltfile pltResults00100 --plot
+```
+
+Via devenv:
+
+```bash
+ovrflw-test-tgv           # build + run + compare
+ovrflw-test-tgv --plot    # also save tgv_comparison.png
+```
+
+### 2D Lid-Driven Cavity — Re = 400
+
+Runs to steady state (20 000 steps) and compares u/v centerline profiles against Ghia et al. (1982).
+
+```bash
+cd Tests/ldc
+make -j4
+mpirun -np 4 ./ldc2d.gnu.TPROF.MPI.ex inputs
+python ../compare.py --case ldc --re 400 --pltfile pltResults20000 --plot
+```
+
+Via devenv:
+
+```bash
+ovrflw-test-ldc           # build + run + compare
+ovrflw-test-ldc --plot    # also save ldc_re400_comparison.png
+```
 
 ---
 
