@@ -9,6 +9,7 @@
  *
  */
 // =================== LISTING KERNEL HEADERS ==============================
+#include <ctime>
 #include <AMReX_Gpu.H>
 #include <AMReX_Utility.H>
 #include <AMReX_PlotFileUtil.H>
@@ -33,17 +34,46 @@
 using namespace amrex;
 
 // ============================== MAIN SECTION ==============================//
-/**
- * This is the code using AMReX for solving Navier-Stokes equation using
- * hybrid staggerred/non-staggered method
- * Note that the Contravariant variables stay at the face center
- * The pressure and Cartesian velocities are in the volume center
- */
+
+void print_banner ()
+{
+    amrex::Print()
+        << "\n"
+        << "   ██████╗  ██╗   ██╗ ██████╗  ███████╗ ██╗      ██╗    ██╗\n"
+        << "  ██╔═══██╗ ██║   ██║ ██╔══██╗ ██╔════╝ ██║      ██║    ██║\n"
+        << "  ██║   ██║ ██║   ██║ ██████╔╝ █████╗   ██║      ██║ █╗ ██║\n"
+        << "  ██║   ██║ ╚██╗ ██╔╝ ██╔══██╗ ██╔══╝   ██║      ██║███╗██║\n"
+        << "  ╚██████╔╝  ╚████╔╝  ██║  ██║ ██║      ███████╗ ╚███╔███╔╝\n"
+        << "   ╚═════╝    ╚═══╝   ╚═╝  ╚═╝ ╚═╝      ╚══════╝  ╚═══╝╚══╝\n"
+        << "\n"
+        << "  Incompressible Navier-Stokes  |  Fractional Step Method\n"
+        << "  Built on AMReX\n"
+        << "  ─────────────────────────────────────────────────────────\n";
+
+    std::time_t now = std::time(nullptr);
+    char timestr[64];
+    std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S",
+                  std::localtime(&now));
+
+    amrex::Print()
+        << "  MPI tasks  : " << amrex::ParallelDescriptor::NProcs() << "\n";
+#ifdef AMREX_USE_CUDA
+    amrex::Print() << "  Accelerator: CUDA\n";
+#else
+    amrex::Print() << "  Accelerator: CPU\n";
+#endif
+    amrex::Print()
+        << "  Started    : " << timestr << "\n"
+        << "  ─────────────────────────────────────────────────────────\n"
+        << "\n";
+}
+
 int main (int argc, char* argv[])
 {
    	amrex::Initialize(argc,argv);
+	print_banner();
 	main_main();
-   	amrex::Print() << "Happy AMRESSIF~ing!\n";
+   	amrex::Print() << "\n  Happy Overflowing!\n\n";
    	amrex::Finalize();
    	return 0;
 }
@@ -730,6 +760,10 @@ void main_main ()
 	const int IOProc = ParallelDescriptor::IOProcessorNumber();
 	ParallelDescriptor::ReduceRealMax(stop_time,IOProc);
 
-	// Tell the I/O Processor to write out the "run time"
-	amrex::Print() << "Run time = " << stop_time << std::endl;
+	amrex::Print()
+        << "\n"
+        << "  ─────────────────────────────────────────────────────────\n"
+        << "  Simulation complete.\n"
+        << "  Wall time  : " << stop_time << " s\n"
+        << "  ─────────────────────────────────────────────────────────\n";
 }

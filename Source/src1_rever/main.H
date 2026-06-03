@@ -2,5 +2,6 @@
 #define MAIN_H_
 
 void main_main ();
+void print_banner ();
 
 #endif
