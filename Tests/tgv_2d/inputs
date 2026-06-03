@@ -1,0 +1,39 @@
+# --- 2D Taylor-Green Vortex benchmark ---
+# Exact solution: u = sin(x)cos(y)exp(-2*nu*t), v = -cos(x)sin(y)exp(-2*nu*t)
+# Re=1, nu=1 => decay rate = 2
+# Compile with DIM=2
+lo_phy_dim = 0.0 0.0
+hi_phy_dim = 6.28318530718 6.28318530718
+
+n_cell = 128 128
+box_size = 64 64
+
+fixed_dt = 1.0e-3
+nsteps   = 100
+
+ren = 1
+vis = 1.0
+
+plot_int = 100
+chk_int  = -1
+chk_out  = 0
+
+# All periodic
+phy_bc_lo = 111 111
+phy_bc_hi = 111 111
+inflow_waveform = 0.0 0.0
+
+ic_type = dynamic
+ic_velocity_x_expr = "sin(x)*cos(y)*exp(-2.0*t)"
+ic_velocity_y_expr = "-cos(x)*sin(y)*exp(-2.0*t)"
+ic_pressure_expr   = "-(1.0/4.0)*(cos(2.0*x)+cos(2.0*y))*exp(-4.0*t)"
+stop_after_init    = 0
+
+PSEUDO_TIMESTEPPING  = 1
+IterNum              = 50
+momentum_tolerance   = 1.0e-8
+target_resolution    = 4
+cfl                  = 3
+
+amrex.v = 0
+amrex.async_out = 0

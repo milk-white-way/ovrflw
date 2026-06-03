@@ -1,0 +1,38 @@
+# --- 2D Lid-Driven Cavity benchmark, Re=400 ---
+# Top wall (hi y) moves at u=1; all other walls no-slip
+# Reference: Ghia et al. (1982), J. Comput. Phys. 48(3), 387-411
+# Compile with DIM=2
+lo_phy_dim = 0.0 0.0
+hi_phy_dim = 1.0 1.0
+
+n_cell = 128 128
+box_size = 64 64
+
+fixed_dt = 5.0e-3
+nsteps   = 20000
+
+ren = 400
+vis = 0.0025
+
+plot_int = 5000
+chk_int  = -1
+chk_out  = 0
+
+# x: wall | y: wall
+phy_bc_lo = 131 131
+phy_bc_hi = 131 151
+inflow_waveform = 1.0 0.0
+
+ic_type            = static
+ic_velocity_static = 0.0 0.0
+ic_pressure_static = 0.0
+stop_after_init    = 0
+
+PSEUDO_TIMESTEPPING  = 1
+IterNum              = 100
+momentum_tolerance   = 1.0e-10
+target_resolution    = 4
+cfl                  = 3
+
+amrex.v = 0
+amrex.async_out = 0

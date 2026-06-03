@@ -6,9 +6,7 @@ hi_phy_dim = 3.14159265359 3.14159265359 3.14159265359
 
 #----- specify computational grid ----------
 n_cell = 64 64 64
-max_grid_size_x = 32
-max_grid_size_y = 32
-max_grid_size_z = 32
+box_size = 64 64 64
 #-------------------------------------------
 
 #----- temporal settings -------------------
@@ -17,7 +15,7 @@ nsteps = 10000
 #-------------------------------------------
 
 #----- fluid properties --------------------
-ren = 1
+ren = 1600
 vis = 1
 #-------------------------------------------
 
@@ -49,8 +47,8 @@ inflow_waveform = 0.0 1.0 0.0
 # For ic_type = dynamic (math expressions in x, y, z):
 # --- "dynamic" template ---
 ic_type = dynamic
-ic_velocity_x_expr  = "sin(x)*cos(y)*cos(z)*exp(-2.0*t)"
-ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*t)"
+ic_velocity_x_expr  = "sin(x)*cos(y)*cos(z)*exp(-2.0*(0.000625)*t)"
+ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*(0.000625)*t)"
 ic_velocity_z_expr  = "0"
 ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
 #

@@ -31,3 +31,29 @@ Exec/outputs
 #|____________________________________________________________________________|
 Tools/Convergence/*.ex
 Tools/Convergence/tmp_build_dir
+
+#|--------------------- List of components to ignore -------------------------|
+#|                              TESTS FOLDER                                  |
+#|____________________________________________________________________________|
+Tests/tgv_3d/
+Tests/tgv_2d/plt*/
+Tests/tgv_2d/checkpoint*/
+Tests/ldc/plt*/
+Tests/ldc/checkpoint*/
+Tests/ldc/*.log
+Tests/tgv_2d/*.log
+
+
+#|--------------------- List of components to ignore -------------------------|
+#|                                DEVENV.SH                                   |
+#|____________________________________________________________________________|
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

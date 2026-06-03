@@ -16,7 +16,7 @@ PROFILE      = FALSE
 #FORT_CPP = cpp -E -traditional-cpp -P -x c
 BL_NO_FORT   = TRUE
 
-#EBASE = myDEBUG
+EBASE = ovrflw
 
 # On NixOS, CUDA is split across Nix store packages.
 # Find the merged package (has both include/ and lib/) via glob — faster than find.

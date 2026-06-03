@@ -46,7 +46,8 @@ void print_banner ()
         << "  ╚██████╔╝  ╚████╔╝  ██║  ██║ ██║      ███████╗ ╚███╔███╔╝\n"
         << "   ╚═════╝    ╚═══╝   ╚═╝  ╚═╝ ╚═╝      ╚══════╝  ╚═══╝╚══╝\n"
         << "\n"
-        << "  Incompressible Navier-Stokes  |  Fractional Step Method\n"
+        << "  Exascale Incompressible Navier-Stokes Solver  					 \n" 
+    		<< "  Fractional Step Method   w/   Hybrid Grid Configuration  \n"
         << "  Built on AMReX\n"
         << "  ─────────────────────────────────────────────────────────\n";
 
@@ -84,14 +85,12 @@ void main_main ()
 	auto strt_time = ParallelDescriptor::second();
 
 	// AMREX_SPACEDIM: number of dimensions
-	Vector<int> n_cell(AMREX_SPACEDIM, 0); // number of cells on each side of the physical domain
-	int max_grid_size_x; // The domain is broken into boxes of size max_grid_size
-	int max_grid_size_y;
-	int max_grid_size_z;
+	Vector<int> n_cell(AMREX_SPACEDIM, 0);  				// number of cells on each side of the physical domain
+	Vector<int> box_size(AMREX_SPACEDIM, 0);   // number of max cells for each box
 	int nsteps; 		// Steps to run in the simulation
 
-	int plot_int; 		// How often to write plot files			; input <=0 to turn off
-	int txt_int;   		// How often to write text files			; input <=0 to turn off
+	int plot_int; 	// How often to write plot files			; input <=0 to turn off
+	int txt_int;   	// How often to write text files			; input <=0 to turn off
 	int chk_int; 		// How often to write checkpoint files ; input <=0 to turn off
 	int chk_out; 		// Checkpoint frame to load
 
@@ -100,9 +99,9 @@ void main_main ()
 	int PRESSURE_GRADIENT_APPROACH;
 
 	Real ren; 			// Reynolds number
-	Real vis;   	  	// Kinematic Viscosity
+	Real vis;   	  // Kinematic Viscosity
 	Real cfl;   		// CFL number
-	Real fixed_dt; 		// Input time step (more preferred in CFD compared to auto-calculated)
+	Real fixed_dt; 	// Input time step (more preferred in CFD compared to auto-calculated)
 
 	// Physical boundary condition
 	Vector<int> phy_bc_lo(AMREX_SPACEDIM, 0);
@@ -129,16 +128,16 @@ void main_main ()
 		}
 
 		// The domain is broken into boxes of size max_grid_size
-		pp.get("max_grid_size_x", max_grid_size_x);
-		pp.get("max_grid_size_y", max_grid_size_y);
-		pp.get("max_grid_size_z", max_grid_size_z);
+		pp.queryarr("box_size", box_size);
 
 		lo_phy_dim[0] = amrex::Real(0.0);
 		lo_phy_dim[1] = amrex::Real(0.0);
-		lo_phy_dim[2] = amrex::Real(0.0);
 		hi_phy_dim[0] = amrex::Real(1.0);
 		hi_phy_dim[1] = amrex::Real(1.0);
+#if (AMREX_SPACEDIM > 2)
+		lo_phy_dim[2] = amrex::Real(0.0);
 		hi_phy_dim[2] = amrex::Real(1.0);
+#endif
 		pp.queryarr("lo_phy_dim", lo_phy_dim);
 		pp.queryarr("hi_phy_dim", hi_phy_dim);
 
@@ -191,6 +190,14 @@ void main_main ()
 		chk_out = 0;
 		pp.query("chk_out", chk_out);
 	}
+
+	int max_grid_size_x = box_size[0];
+	int max_grid_size_y = box_size[1];
+#if (AMREX_SPACEDIM > 2)
+	int max_grid_size_z = box_size[2];
+#else
+  int max_grid_size_z = 1;
+#endif
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= Parsing Initial Condition Parameters =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 	std::string ic_type = "static";

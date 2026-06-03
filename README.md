@@ -1,4 +1,4 @@
-# OvrFlw
+# OvrFlw <sub>E0 (Edition One)</sub>
 
 > Previously: AMReX-based Exascale Simulation Software for Incompressible Flows (AMRESSIF)
 
@@ -86,9 +86,7 @@ All simulation parameters are read from the `inputs` file at runtime — no reco
 lo_phy_dim = 0.0 0.0 0.0        # physical domain lower corner
 hi_phy_dim = 1.0 1.0 1.0        # physical domain upper corner
 n_cell     = 64 64 64           # cells in each direction
-max_grid_size_x = 32            # box decomposition (tune for MPI/GPU)
-max_grid_size_y = 32
-max_grid_size_z = 32
+box_size = 32 32 32             # box decomposition (tune for MPI/GPU)
 ```
 
 ### Time stepping
