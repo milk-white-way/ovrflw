@@ -4,6 +4,7 @@
   # ── Runtime: real CUDA driver, not the NixOS stub ──────────────────────
   env.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
   env.AMREX_HOME      = "/home/milk-white-way/frameworks/amrex";
+  env.GIO_EXTRA_MODULES = "";
 
   # ── Build tools ─────────────────────────────────────────────────────────
   packages = with pkgs; [

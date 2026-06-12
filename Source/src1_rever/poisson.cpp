@@ -1,4 +1,5 @@
 #include "poisson.H"
+#include "kn_enforce_wall_bcs.H"
 #include "kn_poisson.H"
 
 #include <AMReX_BCUtil.H>

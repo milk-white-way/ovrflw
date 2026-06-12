@@ -46,14 +46,14 @@ void print_banner ()
         << "  ╚██████╔╝  ╚████╔╝  ██║  ██║ ██║      ███████╗ ╚███╔███╔╝\n"
         << "   ╚═════╝    ╚═══╝   ╚═╝  ╚═╝ ╚═╝      ╚══════╝  ╚═══╝╚══╝\n"
         << "\n"
-        << "  Exascale Incompressible Navier-Stokes Solver  					 \n" 
+        << "  Exascale Incompressible Navier-Stokes Solver  					 \n"
     		<< "  Fractional Step Method   w/   Hybrid Grid Configuration  \n"
         << "  Built on AMReX\n"
         << "  ─────────────────────────────────────────────────────────\n";
 
     std::time_t now = std::time(nullptr);
-    char timestr[64];
-    std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S",
+    char time_str[64];
+    std::strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S",
                   std::localtime(&now));
 
     amrex::Print()
@@ -64,7 +64,27 @@ void print_banner ()
     amrex::Print() << "  Accelerator: CPU\n";
 #endif
     amrex::Print()
-        << "  Started    : " << timestr << "\n"
+        << "  Started    : " << time_str << "\n"
+        << "  ─────────────────────────────────────────────────────────\n"
+        << "\n";
+}
+
+void print_credits ()
+{
+    amrex::Print()
+           << "\n  ─────────────────────────────────────────────────────────\n";
+	char time_end[64];
+	std::time_t now = std::time(nullptr);
+	std::strftime(time_end, sizeof(time_end), "%Y-%m-%d %H:%M:%S",
+                     std::localtime(&now));
+	amrex::Print()
+	    << "  Happy Overflow~ing!\n"
+		<< "  Ended      : " << time_end << "\n"
+		<< "  IMPORTANT  : No part of this repository may be reproduced, distributed, or transmitted\n"
+		<< "  in any form or by any means, including photocopying, recording, or other electronic or\n"
+		<< "  mechanical methods, without the prior written permission of the authors:\n"
+		<< "    Dr. Trung B. Le (trung.le@ndsu.edu)\n"
+        << "    Thien-Tam Nguyen (tam.thien.nguyen@ndsu.edu)\n"
         << "  ─────────────────────────────────────────────────────────\n"
         << "\n";
 }
@@ -74,7 +94,7 @@ int main (int argc, char* argv[])
    	amrex::Initialize(argc,argv);
 	print_banner();
 	main_main();
-   	amrex::Print() << "\n  Happy Overflowing!\n\n";
+	print_credits();
    	amrex::Finalize();
    	return 0;
 }
@@ -85,7 +105,7 @@ void main_main ()
 	auto strt_time = ParallelDescriptor::second();
 
 	// AMREX_SPACEDIM: number of dimensions
-	Vector<int> n_cell(AMREX_SPACEDIM, 0);  				// number of cells on each side of the physical domain
+	Vector<int> n_cell(AMREX_SPACEDIM, 0);     // number of cells on each side of the physical domain
 	Vector<int> box_size(AMREX_SPACEDIM, 0);   // number of max cells for each box
 	int nsteps; 		// Steps to run in the simulation
 
@@ -210,14 +230,14 @@ void main_main ()
 	int stop_after_init = 0;
 	{
 		ParmParse pp;
-		pp.query("ic_type",            ic_type);
-		pp.queryarr("ic_velocity_static", ic_velocity_static);
-		pp.query("ic_pressure_static", ic_pressure_static);
-		pp.query("ic_velocity_x_expr", ic_velocity_x_expr);
-		pp.query("ic_velocity_y_expr", ic_velocity_y_expr);
-		pp.query("ic_velocity_z_expr", ic_velocity_z_expr);
-		pp.query("ic_pressure_expr",   ic_pressure_expr);
-		pp.query("stop_after_init",    stop_after_init);
+		pp.query("ic_type",                 ic_type);
+		pp.queryarr("ic_velocity_static",   ic_velocity_static);
+		pp.query("ic_pressure_static",      ic_pressure_static);
+		pp.query("ic_velocity_x_expr",      ic_velocity_x_expr);
+		pp.query("ic_velocity_y_expr",      ic_velocity_y_expr);
+		pp.query("ic_velocity_z_expr",      ic_velocity_z_expr);
+		pp.query("ic_pressure_expr",        ic_pressure_expr);
+		pp.query("stop_after_init",         stop_after_init);
 	}
 
 	GpuArray<Real, AMREX_SPACEDIM> inflow_waveform;
@@ -512,9 +532,10 @@ void main_main ()
 			if ( phy_bc_lo[idim] == 111 ) {
 				bc[n].setLo(idim, BCType::int_dir);
 			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
-						std::abs(phy_bc_lo[idim]) == 151 ||
-						std::abs(phy_bc_lo[idim]) == 171 ) {
+						std::abs(phy_bc_lo[idim]) == 151 ) {
 				bc[n].setLo(idim, BCType::foextrap);
+			} else if ( std::abs(phy_bc_lo[idim]) == 171 ) {
+				bc[n].setLo(idim, BCType::ext_dir);
 			} else {
 				amrex::Abort("Invalid bc_lo");
 			}
@@ -522,9 +543,10 @@ void main_main ()
 			if ( phy_bc_hi[idim] == 111 ) {
 				bc[n].setHi(idim, BCType::int_dir);
 			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
-						std::abs(phy_bc_hi[idim]) == 151 ||
-						std::abs(phy_bc_hi[idim]) == 171 ) {
+						std::abs(phy_bc_hi[idim]) == 151 ) {
 				bc[n].setHi(idim, BCType::foextrap);
+			} else if ( std::abs(phy_bc_hi[idim]) == 171 ) {
+				bc[n].setHi(idim, BCType::ext_dir);
 			} else {
 				amrex::Abort("Invalid bc_hi");
 			}
@@ -579,6 +601,11 @@ void main_main ()
 			MultiFab::Copy(velContPrev[comp], velCont[comp], 0, 0, 1, 0);
 			MultiFab::Copy(velStar[comp], velCont[comp], 0, 0, 1, 0);
 		}
+
+		// Volumetric flow rate conservation
+		// Area = width * height of the outlet
+		Real lArea = n_cell[1]*dx[1] * n_cell[2]*dx[2];
+		amrex::Print() << "INFO| Inlet and Outlet Area = " << lArea << "\n";
 
 		// Update the time
 		time = time + dt;
@@ -685,6 +712,9 @@ void main_main ()
 		amrex::Print() << "\n";
 		//break; // Tactical breakpoint
 
+		// Enforce global mass conservation before Poisson: FluxIn = FluxOut
+		// enforce_volumetric_flux_conservation(velStar, geom, phy_bc_lo, phy_bc_hi, n_cell);
+
 		// Poisson solver
 		//    Laplacian(\phi) = (Real(1.5)/dt)*Div(u_i^*)
 		// POISSON |1| Calculating the RSH
@@ -711,7 +741,7 @@ void main_main ()
 		}
 		MultiFab::Copy(userCtx, poisson_sol, 0, 1, 1, 0);
 		userCtx.FillBoundary(geom.periodicity());
-		enforce_bcs_for_userCtx(userCtx, geom, n_cell);
+		enforce_bcs_for_userCtx(userCtx, geom, phy_bc_lo, phy_bc_hi, n_cell);
 
 		// Update the solution
 		// Step 1 --- correct velocity: u_i^{n+1} = u_i^*- 2dt/3 * grad(\phi^{n+1})
@@ -720,7 +750,7 @@ void main_main ()
 		update_solution(userCtx, velCart, array_grad_phi, velCont, velStar, geom, dt);
 		cont2cart(velCart, velCont, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
 		userCtx.FillBoundary(geom.periodicity());
-		enforce_bcs_for_userCtx(userCtx, geom, n_cell);
+		enforce_bcs_for_userCtx(userCtx, geom, phy_bc_lo, phy_bc_hi, n_cell);
 
 		// Writing checkpoint files
 		if (chk_int > 0 && n%chk_int == 0)

@@ -42,6 +42,7 @@ Tests/ldc/plt*/
 Tests/ldc/checkpoint*/
 Tests/ldc/*.log
 Tests/tgv_2d/*.log
+Tests/pipe_uniform/
 
 
 #|--------------------- List of components to ignore -------------------------|

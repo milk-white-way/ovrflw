@@ -1,27 +1,29 @@
 # USER INPUTS
 #----- dimensions of physical domain -------
-lo_phy_dim = -3.14159265359 -3.14159265359 -3.14159265359
-hi_phy_dim = 3.14159265359 3.14159265359 3.14159265359
+#lo_phy_dim = -3.14159265359 -3.14159265359 -3.14159265359
+#hi_phy_dim = 3.14159265359 3.14159265359 3.14159265359
+lo_phy_dim = 0.0 0.0 0.0
+hi_phy_dim = 10.0 1.0 1.0
 #-------------------------------------------
 
 #----- specify computational grid ----------
-n_cell = 64 64 64
-box_size = 64 64 64
+n_cell = 320 32 32
+box_size = 320 32 32
 #-------------------------------------------
 
 #----- temporal settings -------------------
-fixed_dt = 2.0e-3
-nsteps = 10000
+fixed_dt = 2.0e-4
+nsteps = 2000
 #-------------------------------------------
 
 #----- fluid properties --------------------
-ren = 1600
+ren = 1
 vis = 1
 #-------------------------------------------
 
 #----- output settings ---------------------
-plot_int = 100
-chk_int = 100
+plot_int = 10
+chk_int = -10
 chk_out = -10
 #-------------------------------------------
 
@@ -30,27 +32,27 @@ chk_out = -10
 # --- wall: 131 (no-slip) ; -131 (slip)
 # --- inlet: 151 (constant velocity) ;
 # --- outlet: 171 (constant velocity) ;
-phy_bc_lo = 111 111 111
-phy_bc_hi = 111 111 111
+phy_bc_lo = 151 131 131
+phy_bc_hi = 171 131 131
 # only if inlet is prescribed => (u, v, w) 
-inflow_waveform = 0.0 1.0 0.0
+inflow_waveform = 1.0 0.0 0.0
 
 # ----- initial conditions -----------------
 # Can be either "static" (default) or "dynamic"
 # --- "static" template ---
-# ic_type = static           
+ic_type = static           
 #
 # For ic_type = static:
-# ic_velocity_static  = 0.0 0.0 0.0    # u v w
-# ic_pressure_static  = 0.0
+ic_velocity_static  = 0.0 0.0 0.0    # u v w
+ic_pressure_static  = 0.0
 #
 # For ic_type = dynamic (math expressions in x, y, z):
 # --- "dynamic" template ---
-ic_type = dynamic
-ic_velocity_x_expr  = "sin(x)*cos(y)*cos(z)*exp(-2.0*(0.000625)*t)"
-ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*(0.000625)*t)"
-ic_velocity_z_expr  = "0"
-ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
+#ic_type = dynamic
+#ic_velocity_x_expr  = "sin(x)*cos(y)*cos(z)*exp(-2.0*(0.000625)*t)"
+#ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*(0.000625)*t)"
+#ic_velocity_z_expr  = "0"
+#ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
 #
 # --- flag to check init before running  ---
 stop_after_init = 0 # set to 1 to write pltInitCheck and exit

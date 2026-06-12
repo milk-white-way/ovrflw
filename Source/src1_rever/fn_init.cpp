@@ -252,7 +252,7 @@ void hybrid_grid_init ( MultiFab& userCtx,
     }
 
     userCtx.FillBoundary(geom.periodicity());
-    enforce_bcs_for_userCtx(userCtx, geom, n_cell);
+    enforce_bcs_for_userCtx(userCtx, geom, phy_bc_lo, phy_bc_hi, n_cell);
 	BL_PROFILE_VAR_STOP(init_pressure_components);
 }
 

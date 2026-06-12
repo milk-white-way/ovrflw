@@ -26,9 +26,17 @@ void enforce_bcs_for_velCart (amrex::MultiFab& velCart,
 
 void enforce_bcs_for_userCtx (amrex::MultiFab& userCtx,
                               amrex::Geometry const& geom,
+                              amrex::Vector<int> const& phy_bc_lo,
+                              amrex::Vector<int> const& phy_bc_hi,
                               amrex::Vector<int> const& n_cell);
 
 void enforce_bcs_for_fluxTotal (amrex::MultiFab& flux_total,
                                 amrex::Geometry const& geom,
                                 amrex::Vector<int> const& n_cell);
+
+void enforce_volumetric_flux_conservation (amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& velStar,
+                                           amrex::Geometry const& geom,
+                                           amrex::Vector<int> const& phy_bc_lo,
+                                           amrex::Vector<int> const& phy_bc_hi,
+                                           amrex::Vector<int> const& n_cell);
 #endif
