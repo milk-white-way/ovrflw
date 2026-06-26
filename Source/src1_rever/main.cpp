@@ -511,15 +511,8 @@ void main_main ()
 		Export_Flow_Field("pltInit", userCtx, velCart, ba, dm, geom, time, 0);
 		Export_Flow_Field("pltInitPrev", userCtx, velCartPrev, ba, dm, geom, time, 0);
 
-		if (stop_after_init) {
-			amrex::Print() << "INFO| stop_after_init set — exiting after initialization.\n";
-			return;
-		}
-
 		starting_step = 1;
 	}
-
-	//amrex::Abort("INFO | STOP HERE FOR DEBUGGING RESTART ROUTINE");
 
 	//---------------------------------------------------------
 	// Boundary conditions for the Poisson equation
@@ -532,32 +525,37 @@ void main_main ()
 			if ( phy_bc_lo[idim] == 111 ) {
 				bc[n].setLo(idim, BCType::int_dir);
 			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
-						std::abs(phy_bc_lo[idim]) == 151 ) {
+						std::abs(phy_bc_lo[idim]) == 151 ||
+						std::abs(phy_bc_lo[idim]) == 171 ) {
 				bc[n].setLo(idim, BCType::foextrap);
-			} else if ( std::abs(phy_bc_lo[idim]) == 171 ) {
-				bc[n].setLo(idim, BCType::ext_dir);
 			} else {
 				amrex::Abort("Invalid bc_lo");
 			}
 
 			if ( phy_bc_hi[idim] == 111 ) {
 				bc[n].setHi(idim, BCType::int_dir);
-			} else if ( std::abs(phy_bc_lo[idim]) == 131 ||
-						std::abs(phy_bc_hi[idim]) == 151 ) {
+			} else if ( std::abs(phy_bc_hi[idim]) == 131 ||
+						std::abs(phy_bc_hi[idim]) == 151 ||
+						std::abs(phy_bc_hi[idim]) == 171 ) {
 				bc[n].setHi(idim, BCType::foextrap);
-			} else if ( std::abs(phy_bc_hi[idim]) == 171 ) {
-				bc[n].setHi(idim, BCType::ext_dir);
 			} else {
 				amrex::Abort("Invalid bc_hi");
 			}
 		}
+		amrex::Print() << "INFO| Poisson equation BCs: " << bc[n] << "\n";
 	}
 
 	// Print desired variables for debugging
 	//amrex::Print() << "PARAMS| cfl value calculated from geometry: " << cfl << "\n";
 	//amrex::Print() << "PARAMS| dt value from above cfl: " << dt << "\n";
-	amrex::Print() << "PARAMS| reynolds number: " << ren << "\n";
-	amrex::Print() << "PARAMS| number of ghost cells for each array: " << Nghost << "\n";
+	amrex::Print() << "INFO| reynolds number: " << ren << "\n";
+	amrex::Print() << "INFO| number of ghost cells for each array: " << Nghost << "\n";
+
+	if (stop_after_init) {
+		amrex::Print() << "INFO| stop_after_init ENABLED --> exiting after initialization.\n";
+		return;
+	}
+	//amrex::Abort("INFO | STOP HERE FOR DEBUGGING RESTART ROUTINE");
 
 	// Quickly init other fields as zero
 	fluxConvect.setVal(0.0);
@@ -635,11 +633,12 @@ void main_main ()
 				convective_flux_calc_new_quick(fluxTotal, fluxConvect, fluxHalfN1, fluxHalfN2, fluxHalfN3, velCart, velStar, phy_bc_lo, phy_bc_hi, geom);
 				viscous_flux_calc(fluxTotal, fluxViscous, velCart, ren, geom);
 				fluxTotal.FillBoundary(geom.periodicity());
-				enforce_bcs_for_fluxTotal(fluxTotal, geom, n_cell);
+				enforce_bcs_for_fluxTotal(fluxTotal, geom, phy_bc_lo, phy_bc_hi, n_cell);
 				// ---------- MOMENTUM SOLVER ------------------------------------------------------
 				momentum_righthand_side_calc(fluxTotal, array_grad_p, momentum_rhs, phy_bc_lo, phy_bc_hi, geom);
 				amrex::Print() << "SOLVING| Momentum | performing Explicit Time Marching ";
 				explicit_time_marching(momentum_rhs, velStar, velContDiff, geom, phy_bc_lo, phy_bc_hi, dt);
+				enforce_bcs_for_velStar(velStar, geom, phy_bc_lo, phy_bc_hi, inflow_waveform);
 
 				normError = Error_Computation(velCont, velStar, velStarDiff, geom);
 				amrex::Print() << "=> latest error norm = " << normError << "\n";
@@ -674,10 +673,11 @@ void main_main ()
 					fluxTotal.FillBoundary(geom.periodicity());
 					// Fluxes' normal component on the wall boundaries are set to zero
 					// Enforced by 1 layer of ghost cells
-					enforce_bcs_for_fluxTotal(fluxTotal, geom, n_cell);
+					enforce_bcs_for_fluxTotal(fluxTotal, geom, phy_bc_lo, phy_bc_hi, n_cell);
 					// ---------- MOMENTUM SOLVER -----------------------------------------------------
 					momentum_righthand_side_calc(fluxTotal, array_grad_p, momentum_rhs, phy_bc_lo, phy_bc_hi, geom);
 					runge_kutta4_pseudo_time_stepping(rk, sub, momentum_rhs, velStar, velCont, velContDiff, velContPrev, velCart, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, dt);
+					enforce_bcs_for_velStar(velStar, geom, phy_bc_lo, phy_bc_hi, inflow_waveform);
 					cont2cart(velCart, velStar, geom, Nghost, phy_bc_lo, phy_bc_hi, inflow_waveform, time, n_cell);
 				} // RUNGE-KUTTA | END
 				normError = Error_Computation(velCont, velStar, velStarDiff, geom);
@@ -692,11 +692,11 @@ void main_main ()
 			// Handler for blowing-up situation
 			//if (countIter == 2) {
 			if (countIter > IterNum) {
-				amrex::Print() << "WARNING| Exceeded number of momenum iterations; exiting loop\n";
+				amrex::Print() << "WARNING| Exceeded number of momenum iterations; exiting solver\n";
 			}
 			if ( normError > 1.e2 )
 			{
-			    amrex::Abort("WARNING| Error Norm diverges, stoping solver...\n");
+			    amrex::Abort("WARNING| Error Norm diverges, stopping OvrFlw!!!\n");
 			}
 			//break; // Tactical breakpoint
 		}// End of the Momentum loop iteration!
@@ -713,7 +713,7 @@ void main_main ()
 		//break; // Tactical breakpoint
 
 		// Enforce global mass conservation before Poisson: FluxIn = FluxOut
-		// enforce_volumetric_flux_conservation(velStar, geom, phy_bc_lo, phy_bc_hi, n_cell);
+		enforce_volumetric_flux_conservation(velStar, geom, phy_bc_lo, phy_bc_hi, n_cell);
 
 		// Poisson solver
 		//    Laplacian(\phi) = (Real(1.5)/dt)*Div(u_i^*)
@@ -768,16 +768,22 @@ void main_main ()
 		// Divergence should be zero
 		poisson_righthand_side_calc(poisson_rhs, velCont, geom, dt);
 
+		if (plot_int > 0 && n%plot_int == 0)
+		{
+			Export_Flow_Field("pltResults", userCtx, velCart, ba, dm, geom, time, n);
+			Export_Inlet_Face("pltInletFace", velCont, geom, n_cell, time, n);
+		}
+
 		// Compare the solution with the analytical solution
+		/*
 		cc_analytical_calc(cc_analytical_diff, geom, time);
 		cc_spectral_analysis(cc_kinetic_energy, cc_analytical_diff, geom);
 		if (plot_int > 0 && n%plot_int == 0)
 		{
 			const std::string &analytical_export = amrex::Concatenate("pltAnalytic", n, 5);
 			WriteSingleLevelPlotfile(analytical_export, cc_analytical_diff, {"p-exac","u-exac", "v-exac"}, geom, time, n);
-
-			Export_Flow_Field("pltResults", userCtx, velCart, ba, dm, geom, time, n);
 		}
+		*/
 
 		/*
 		for ( int comp=0; comp < AMREX_SPACEDIM; ++comp)

@@ -609,6 +609,71 @@ void Export_Flow_Field(std::string const &nameofFile,
 #endif
 }
 
+void Export_Inlet_Face (std::string const& prefix,
+                        Array<MultiFab, AMREX_SPACEDIM>& velFace,
+                        Geometry const& geom,
+                        Vector<int> const& n_cell,
+                        Real const& time,
+                        int const& timestep)
+{
+    const int ny = n_cell[1];
+    const int nz = n_cell[2];
+
+    // Step 1: fill a device buffer from velFace[0] at face i=0 using a GPU kernel
+    Gpu::DeviceVector<Real> d_buf(ny * nz, Real(0.0));
+    Real* d_ptr = d_buf.dataPtr();
+
+    for (MFIter mfi(velFace[0]); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.validbox();
+        if (bx.bigEnd(0) < 0 || bx.smallEnd(0) > 0) continue;
+        auto const& arr = velFace[0].const_array(mfi);
+        Box face_bx(IntVect(AMREX_D_DECL(0, bx.smallEnd(1), bx.smallEnd(2))),
+                    IntVect(AMREX_D_DECL(0, bx.bigEnd(1),   bx.bigEnd(2))));
+        amrex::ParallelFor(face_bx,
+            [=] AMREX_GPU_DEVICE (int, int j, int k) noexcept {
+                d_ptr[k * ny + j] = arr(0, j, k);
+            });
+    }
+
+    // Step 2: device → host, MPI reduce, host → device
+    Vector<Real> h_buf(ny * nz);
+    Gpu::copy(Gpu::deviceToHost, d_buf.begin(), d_buf.end(), h_buf.begin());
+    ParallelDescriptor::ReduceRealSum(h_buf.data(), ny * nz);
+    Gpu::copy(Gpu::hostToDevice, h_buf.begin(), h_buf.end(), d_buf.begin());
+
+    // Step 3: build a 1-cell-thick cell-centered MultiFab for the i=0 face slice
+    Box cc_box(IntVect(AMREX_D_DECL(0, 0, 0)),
+               IntVect(AMREX_D_DECL(0, ny - 1, nz - 1)));
+    BoxArray            cc_ba(cc_box);
+    DistributionMapping cc_dm(cc_ba);
+    MultiFab cc_mf(cc_ba, cc_dm, 1, 0);
+    cc_mf.setVal(Real(0.0));
+
+    for (MFIter mfi(cc_mf); mfi.isValid(); ++mfi) {
+        auto const& dst = cc_mf.array(mfi);
+        const Box& bx   = mfi.validbox();
+        amrex::ParallelFor(bx,
+            [=] AMREX_GPU_DEVICE (int, int j, int k) noexcept {
+                dst(0, j, k) = d_ptr[k * ny + j];
+            });
+    }
+
+    // Step 4: write
+    auto const& dx = geom.CellSizeArray();
+    amrex::Real slice_lo[AMREX_SPACEDIM] = {AMREX_D_DECL(geom.ProbLo(0),
+                                                           geom.ProbLo(1),
+                                                           geom.ProbLo(2))};
+    amrex::Real slice_hi[AMREX_SPACEDIM] = {AMREX_D_DECL(geom.ProbLo(0) + dx[0],
+                                                           geom.ProbHi(1),
+                                                           geom.ProbHi(2))};
+    RealBox phys_slice(slice_lo, slice_hi);
+    int no_per[AMREX_SPACEDIM] = {AMREX_D_DECL(0, 0, 0)};
+    Geometry slice_geom(cc_box, &phys_slice, geom.Coord(), no_per);
+
+    const std::string& pltfile = amrex::Concatenate(prefix, timestep, 5);
+    WriteSingleLevelPlotfile(pltfile, cc_mf, {"velFace_x"}, slice_geom, time, timestep);
+}
+
 void array_analytical_vel_calc(Array<MultiFab, AMREX_SPACEDIM> &array_analytical_vel,
                                Geometry const &geom,
                                Real const &time) {

@@ -1,4 +1,5 @@
 #include <AMReX_MultiFabUtil.H>
+#include <cstdlib>
 
 #include "fn_enforce_wall_bcs.H"
 #include "kn_enforce_wall_bcs.H"
@@ -377,7 +378,7 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 		int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
 
 		if (vbx.smallEnd(0) < lo) {
-		    if (west_wall_bcs != 171 && west_wall_bcs != -171) {
+		    if ( std::abs(west_wall_bcs) != 171 ) {
 				amrex::ParallelFor(vbx,
 							       [=] AMREX_GPU_DEVICE (int i, int j, int k) {
 					if ( i < lo ) {
@@ -385,19 +386,19 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 						ctx(i, j, k, 1) = ctx(-i - 1, j, k, 1);
 					}
 				});
-			} else if (west_wall_bcs == 171 && west_wall_bcs == -171) {
+			} else if ( std::abs(west_wall_bcs) == 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( i < lo ) {
-                        ctx(i, j, k, 0) = -ctx(-i - 1, j, k, 0);
-                        ctx(i, j, k, 1) = -ctx(-i - 1, j, k, 1);
+                        ctx(i, j, k, 0) = ctx(-i - 1, j, k, 0);
+                        ctx(i, j, k, 1) = ctx(-i - 1, j, k, 1);
                     }
                 });
             }
 		}
 
 		if (vbx.bigEnd(0) > hi) {
-		    if (east_wall_bcs != 171 && east_wall_bcs != -171) {
+		    if ( std::abs(east_wall_bcs) != 171 ) {
 				amrex::ParallelFor(vbx,
 							       [=] AMREX_GPU_DEVICE (int i, int j, int k) {
 					if ( i > hi ) {
@@ -405,12 +406,12 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 						ctx(i, j, k, 1) = ctx(((nxcell - i) + (nxcell - 1)), j, k, 1);
 					}
 				});
-            } else if (east_wall_bcs == 171 && east_wall_bcs == -171) {
+            } else if ( std::abs(east_wall_bcs) == 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( i > hi ) {
-                        ctx(i, j, k, 0) = -ctx(((nxcell - i) + (nxcell - 1)), j, k, 0);
-                        ctx(i, j, k, 1) = -ctx(((nxcell - i) + (nxcell - 1)), j, k, 1);
+                        ctx(i, j, k, 0) = ctx(((nxcell - i) + (nxcell - 1)), j, k, 0);
+                        ctx(i, j, k, 1) = ctx(((nxcell - i) + (nxcell - 1)), j, k, 1);
                     }
                 });
             }
@@ -420,7 +421,7 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 		hi = dom.bigEnd(1);
 
 		if (vbx.smallEnd(1) < lo) {
-		    if (south_wall_bcs != 171 && south_wall_bcs != -171) {
+		    if ( std::abs(south_wall_bcs) != 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( j < lo ) {
@@ -428,19 +429,19 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
                         ctx(i, j, k, 1) = ctx(i, -j - 1, k, 1);
                     }
                 });
-            } else if (south_wall_bcs == 171 && south_wall_bcs == -171) {
+            } else if ( std::abs(south_wall_bcs) == 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( j < lo ) {
-                        ctx(i, j, k, 0) = -ctx(i, -j - 1, k, 0);
-                        ctx(i, j, k, 1) = -ctx(i, -j - 1, k, 1);
+                        ctx(i, j, k, 0) = ctx(i, -j - 1, k, 0);
+                        ctx(i, j, k, 1) = ctx(i, -j - 1, k, 1);
                     }
                 });
             }
 		}
 
 		if (vbx.bigEnd(1) > hi) {
-		    if (north_wall_bcs != 171 && north_wall_bcs != -171) {
+		    if ( std::abs(north_wall_bcs) != 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( j > hi ) {
@@ -448,12 +449,12 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
                         ctx(i, j, k, 1) = ctx(i, ((nycell - j) + (nycell - 1)), k, 1);
                     }
                 });
-            } else if (north_wall_bcs == 171 && north_wall_bcs == -171) {
+            } else if (std::abs(north_wall_bcs) == 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( j > hi ) {
-                        ctx(i, j, k, 0) = -ctx(i, ((nycell - j) + (nycell - 1)), k, 0);
-                        ctx(i, j, k, 1) = -ctx(i, ((nycell - j) + (nycell - 1)), k, 1);
+                        ctx(i, j, k, 0) = ctx(i, ((nycell - j) + (nycell - 1)), k, 0);
+                        ctx(i, j, k, 1) = ctx(i, ((nycell - j) + (nycell - 1)), k, 1);
                     }
                 });
             }
@@ -464,7 +465,7 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 		hi = dom.bigEnd(2);
 
 		if (vbx.smallEnd(2) < lo) {
-		    if (bakward_wall_bcs != 171 && bakward_wall_bcs != -171) {
+		    if ( std::abs(bakward_wall_bcs) != 171 ) {
 				amrex::ParallelFor(vbx,
 							       [=] AMREX_GPU_DEVICE (int i, int j, int k) {
 					if ( k < lo ) {
@@ -472,19 +473,19 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 						ctx(i, j, k, 1) = ctx(i, j, -k - 1, 1);
 					}
 				});
-			} else if (bakward_wall_bcs == 171 && bakward_wall_bcs == -171) {
+			} else if ( std::abs(bakward_wall_bcs) == 171 )  {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( k < lo ) {
-                        ctx(i, j, k, 0) = -ctx(i, j, -k - 1, 0);
-                        ctx(i, j, k, 1) = -ctx(i, j, -k - 1, 1);
+                        ctx(i, j, k, 0) = ctx(i, j, -k - 1, 0);
+                        ctx(i, j, k, 1) = ctx(i, j, -k - 1, 1);
                     }
                 });
             }
 		}
 
 		if (vbx.bigEnd(2) > hi) {
-		    if (forward_wall_bcs != 171 && forward_wall_bcs != -171) {
+		    if (  std::abs(forward_wall_bcs) != 171 ) {
                 amrex::ParallelFor(vbx,
                                    [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                     if ( k > hi ) {
@@ -492,12 +493,12 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
                         ctx(i, j, k, 1) = ctx(i, j, ((nzcell - k) + (nzcell - 1)), 1);
                     }
                 });
-            } else if (forward_wall_bcs == 171 && forward_wall_bcs == -171) {
+            } else if ( std::abs(forward_wall_bcs) == 171 ) {
 				amrex::ParallelFor(vbx,
 								   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
 					if ( k > hi ) {
-						ctx(i, j, k, 0) = -ctx(i, j, ((nzcell - k) + (nzcell - 1)), 0);
-						ctx(i, j, k, 1) = -ctx(i, j, ((nzcell - k) + (nzcell - 1)), 1);
+						ctx(i, j, k, 0) = ctx(i, j, ((nzcell - k) + (nzcell - 1)), 0);
+						ctx(i, j, k, 1) = ctx(i, j, ((nzcell - k) + (nzcell - 1)), 1);
 					}
 				});
             }
@@ -508,6 +509,8 @@ void enforce_bcs_for_userCtx ( MultiFab& userCtx,
 
 void enforce_bcs_for_fluxTotal ( MultiFab& fluxTotal,
                                  Geometry const& geom,
+                                 Vector<int> const& phy_bc_lo,
+                                 Vector<int> const& phy_bc_hi,
                                  Vector<int> const& n_cell )
 {
     fluxTotal.FillBoundary(geom.periodicity());
@@ -527,46 +530,91 @@ void enforce_bcs_for_fluxTotal ( MultiFab& fluxTotal,
         int const& nzcell = n_cell[2];
 #endif
 
+        auto const &west_wall_bcs  = phy_bc_lo[0]; 	// x- wall
+        auto const &east_wall_bcs  = phy_bc_hi[0]; 	// x+ wall
+        auto const &south_wall_bcs = phy_bc_lo[1];	// y- wall
+        auto const &north_wall_bcs = phy_bc_hi[1];	// y+ wall
+#if (AMREX_SPACEDIM > 2)
+        auto const &bakward_wall_bcs = phy_bc_lo[2]; // z- wall
+        auto const &forward_wall_bcs = phy_bc_hi[2]; // z+ wall
+#endif
+
         int lo = dom.smallEnd(0); //amrex::Print() << lo << "\n";
         int hi = dom.bigEnd(0);   //amrex::Print() << hi << "\n";
 
         if (vbx.smallEnd(0) < lo) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( i < lo ) {
-                    flux_total(i, j, k, 0) = -flux_total(-i -1, j, k, 0);
-                }
-            });
+            if ( std::abs(west_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( i < lo ) {
+                        flux_total(i, j, k, 0) = -flux_total(-i -1, j, k, 0);
+                    }
+                });
+            } else if ( std::abs(west_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( i < lo ) {
+                        flux_total(i, j, k, 0) = flux_total(-i -1, j, k, 0);
+                    }
+                });
+            }
         }
 
         if (vbx.bigEnd(0) > hi) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( i > hi ) {
-                    flux_total(i, j, k, 0) = -flux_total(((nxcell - i) + (nxcell - 1)), j, k, 0);
-                }
-            });
+            if ( std::abs(east_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( i > hi ) {
+                        flux_total(i, j, k, 0) = -flux_total(((nxcell - i) + (nxcell - 1)), j, k, 0);
+                    }
+                });
+            } else if ( std::abs(east_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( i > hi ) {
+                        flux_total(i, j, k, 0) = flux_total(((nxcell - i) + (nxcell - 1)), j, k, 0);
+                    }
+                });
+            }
         }
 
         lo = dom.smallEnd(1);
         hi = dom.bigEnd(1);
 
         if (vbx.smallEnd(1) < lo) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( j < lo ) {
-                    flux_total(i, j, k, 1) = -flux_total(i, -j -1, k, 1);
-                }
-            });
+            if ( std::abs(south_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( j < lo ) {
+                        flux_total(i, j, k, 1) = -flux_total(i, -j -1, k, 1);
+                    }
+                });
+            } else if ( std::abs(south_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( j < lo ) {
+                        flux_total(i, j, k, 1) = flux_total(i, -j -1, k, 1);
+                    }
+                });
+            }
         }
 
         if (vbx.bigEnd(1) > hi) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( j > hi ) {
-                    flux_total(i, j, k, 1) = -flux_total(i, ((nycell - j) + (nycell - 1)), k, 1);
-                }
-            });
+            if ( std::abs(north_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( j > hi ) {
+                        flux_total(i, j, k, 1) = -flux_total(i, ((nycell - j) + (nycell - 1)), k, 1);
+                    }
+                });
+            } else if ( std::abs(north_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( j > hi ) {
+                        flux_total(i, j, k, 1) = flux_total(i, ((nycell - j) + (nycell - 1)), k, 1);
+                    }
+                });
+            }
         }
 
 #if (AMREX_SPACEDIM > 2)
@@ -574,24 +622,131 @@ void enforce_bcs_for_fluxTotal ( MultiFab& fluxTotal,
         hi = dom.bigEnd(2);
 
         if (vbx.smallEnd(2) < lo) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( k < lo ) {
-                    flux_total(i, j, k, 2) = -flux_total(i, j, -k -1, 2);
-                }
-            });
+            if ( std::abs(bakward_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( k < lo ) {
+                        flux_total(i, j, k, 2) = -flux_total(i, j, -k -1, 2);
+                    }
+                });
+            } else if ( std::abs(bakward_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( k < lo ) {
+                        flux_total(i, j, k, 2) = flux_total(i, j, -k -1, 2);
+                    }
+                });
+            }
         }
 
         if (vbx.bigEnd(2) > hi) {
-            amrex::ParallelFor(vbx,
-                               [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                if ( k > hi ) {
-                    flux_total(i, j, k, 2) = -flux_total(i, j, ((nzcell - k) + (nzcell - 1)), 2);
-                }
-            });
+            if ( std::abs(forward_wall_bcs) != 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( k > hi ) {
+                        flux_total(i, j, k, 2) = -flux_total(i, j, ((nzcell - k) + (nzcell - 1)), 2);
+                    }
+                });
+            } else if ( std::abs(forward_wall_bcs) == 171 ) {
+                amrex::ParallelFor(vbx,
+                                   [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if ( k > hi ) {
+                        flux_total(i, j, k, 2) = flux_total(i, j, ((nzcell - k) + (nzcell - 1)), 2);
+                    }
+                });
+            }
         }
 #endif
     }
+}
+
+void enforce_bcs_for_velStar (Array<MultiFab, AMREX_SPACEDIM>& velStar,
+                              Geometry const& geom,
+                              Vector<int> const& phy_bc_lo,
+                              Vector<int> const& phy_bc_hi,
+                              GpuArray<Real, AMREX_SPACEDIM> inflow_waveform)
+{
+    const Box& dom = geom.Domain();
+
+    // ── x-direction ───────────────────────────────────────────────────────────
+    // Inlet (151) on lo: normal face velocity = inflow_waveform[0]
+    if (phy_bc_lo[0] == 151) {
+        const int i_lo = dom.smallEnd(0);
+        for (MFIter mfi(velStar[0]); mfi.isValid(); ++mfi) {
+            const Box& bx = mfi.validbox();
+            if (bx.smallEnd(0) > i_lo || bx.bigEnd(0) < i_lo) continue;
+            auto const& vs = velStar[0].array(mfi);
+            const Real u_in = inflow_waveform[0];
+            Box face_bx(IntVect(AMREX_D_DECL(i_lo, bx.smallEnd(1), bx.smallEnd(2))),
+                        IntVect(AMREX_D_DECL(i_lo, bx.bigEnd(1),   bx.bigEnd(2))));
+            amrex::ParallelFor(face_bx,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                    vs(i, j, k) = u_in;
+                });
+        }
+    }
+
+    // ── y-direction: walls (131) → zero normal flux ───────────────────────────
+    if (std::abs(phy_bc_lo[1]) == 131) {
+        const int j_lo = dom.smallEnd(1);
+        for (MFIter mfi(velStar[1]); mfi.isValid(); ++mfi) {
+            const Box& bx = mfi.validbox();
+            if (bx.smallEnd(1) > j_lo || bx.bigEnd(1) < j_lo) continue;
+            auto const& vs = velStar[1].array(mfi);
+            Box face_bx(IntVect(AMREX_D_DECL(bx.smallEnd(0), j_lo, bx.smallEnd(2))),
+                        IntVect(AMREX_D_DECL(bx.bigEnd(0),   j_lo, bx.bigEnd(2))));
+            amrex::ParallelFor(face_bx,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                    vs(i, j, k) = Real(0.0);
+                });
+        }
+    }
+    if (std::abs(phy_bc_hi[1]) == 131) {
+        const int j_hi = dom.bigEnd(1) + 1;
+        for (MFIter mfi(velStar[1]); mfi.isValid(); ++mfi) {
+            const Box& bx = mfi.validbox();
+            if (bx.smallEnd(1) > j_hi || bx.bigEnd(1) < j_hi) continue;
+            auto const& vs = velStar[1].array(mfi);
+            Box face_bx(IntVect(AMREX_D_DECL(bx.smallEnd(0), j_hi, bx.smallEnd(2))),
+                        IntVect(AMREX_D_DECL(bx.bigEnd(0),   j_hi, bx.bigEnd(2))));
+            amrex::ParallelFor(face_bx,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                    vs(i, j, k) = Real(0.0);
+                });
+        }
+    }
+
+#if (AMREX_SPACEDIM > 2)
+    // ── z-direction: walls (131) → zero normal flux ───────────────────────────
+    if (std::abs(phy_bc_lo[2]) == 131) {
+        const int k_lo = dom.smallEnd(2);
+        for (MFIter mfi(velStar[2]); mfi.isValid(); ++mfi) {
+            const Box& bx = mfi.validbox();
+            if (bx.smallEnd(2) > k_lo || bx.bigEnd(2) < k_lo) continue;
+            auto const& vs = velStar[2].array(mfi);
+            Box face_bx(IntVect(AMREX_D_DECL(bx.smallEnd(0), bx.smallEnd(1), k_lo)),
+                        IntVect(AMREX_D_DECL(bx.bigEnd(0),   bx.bigEnd(1),   k_lo)));
+            amrex::ParallelFor(face_bx,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                    vs(i, j, k) = Real(0.0);
+                });
+        }
+    }
+    if (std::abs(phy_bc_hi[2]) == 131) {
+        const int k_hi = dom.bigEnd(2) + 1;
+        for (MFIter mfi(velStar[2]); mfi.isValid(); ++mfi) {
+            const Box& bx = mfi.validbox();
+            if (bx.smallEnd(2) > k_hi || bx.bigEnd(2) < k_hi) continue;
+            auto const& vs = velStar[2].array(mfi);
+            Box face_bx(IntVect(AMREX_D_DECL(bx.smallEnd(0), bx.smallEnd(1), k_hi)),
+                        IntVect(AMREX_D_DECL(bx.bigEnd(0),   bx.bigEnd(1),   k_hi)));
+            amrex::ParallelFor(face_bx,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                    vs(i, j, k) = Real(0.0);
+                });
+        }
+    }
+#endif
 }
 
 void enforce_volumetric_flux_conservation ( Array<MultiFab, AMREX_SPACEDIM>& velStar,
@@ -651,8 +806,6 @@ void enforce_volumetric_flux_conservation ( Array<MultiFab, AMREX_SPACEDIM>& vel
         ParallelDescriptor::ReduceRealSum(FluxOut);
 
         Real ratio = (FluxIn - FluxOut) / area_out;
-        amrex::Print() << "  [FluxConserv] x  FluxIn=" << FluxIn
-                       << "  FluxOut=" << FluxOut << "  correction=" << ratio << "\n";
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
@@ -712,8 +865,6 @@ void enforce_volumetric_flux_conservation ( Array<MultiFab, AMREX_SPACEDIM>& vel
         ParallelDescriptor::ReduceRealSum(FluxOut);
 
         Real ratio = (FluxIn - FluxOut) / area_out;
-        amrex::Print() << "  [FluxConserv] y  FluxIn=" << FluxIn
-                       << "  FluxOut=" << FluxOut << "  correction=" << ratio << "\n";
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
@@ -768,8 +919,6 @@ void enforce_volumetric_flux_conservation ( Array<MultiFab, AMREX_SPACEDIM>& vel
         ParallelDescriptor::ReduceRealSum(FluxOut);
 
         Real ratio = (FluxIn - FluxOut) / area_out;
-        amrex::Print() << "  [FluxConserv] z  FluxIn=" << FluxIn
-                       << "  FluxOut=" << FluxOut << "  correction=" << ratio << "\n";
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())

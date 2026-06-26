@@ -50,6 +50,13 @@ void Export_Flow_Field (std::string const& nameofFile,
                         amrex::Real const& time,
                         int const& timestep);
 
+void Export_Inlet_Face (std::string const& prefix,
+                        amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& velFace,
+                        amrex::Geometry const& geom,
+                        amrex::Vector<int> const& n_cell,
+                        amrex::Real const& time,
+                        int const& timestep);
+
 void array_analytical_vel_calc (amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>& analytical_vel,
                                 amrex::Geometry const& geom,
                                 amrex::Real const& time);

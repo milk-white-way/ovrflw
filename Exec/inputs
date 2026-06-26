@@ -7,13 +7,13 @@ hi_phy_dim = 10.0 1.0 1.0
 #-------------------------------------------
 
 #----- specify computational grid ----------
-n_cell = 320 32 32
-box_size = 320 32 32
+n_cell = 640 64 64
+box_size = 640 64 64
 #-------------------------------------------
 
 #----- temporal settings -------------------
-fixed_dt = 2.0e-4
-nsteps = 2000
+fixed_dt = 1.0e-4
+nsteps = 1000
 #-------------------------------------------
 
 #----- fluid properties --------------------
@@ -25,6 +25,8 @@ vis = 1
 plot_int = 10
 chk_int = -10
 chk_out = -10
+# --- flag to check init before running  ---
+stop_after_init = 0 # set to 1 to write pltInitCheck and exit
 #-------------------------------------------
 
 # ----- boundary conditions ----------------
@@ -53,9 +55,6 @@ ic_pressure_static  = 0.0
 #ic_velocity_y_expr  = "-cos(x)*sin(y)*cos(z)*exp(-2.0*(0.000625)*t)"
 #ic_velocity_z_expr  = "0"
 #ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
-#
-# --- flag to check init before running  ---
-stop_after_init = 0 # set to 1 to write pltInitCheck and exit
 #-------------------------------------------
 
 PSEUDO_TIMESTEPPING = 1
