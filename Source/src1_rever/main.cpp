@@ -136,6 +136,8 @@ void main_main ()
 
 	Real momentum_tolerance;
 
+	std::string poisson_solver;
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= Parsing Inputs =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 	{
 		// ParmParse is way of reading inputs from the inputs file
@@ -209,6 +211,10 @@ void main_main ()
 		// Read checkpoint frame to load
 		chk_out = 0;
 		pp.query("chk_out", chk_out);
+
+		poisson_solver = "hypre";
+		pp.query("poisson_solver", poisson_solver);
+		amrex::Print() << "INFO| Poisson solver: " << poisson_solver << "\n";
 	}
 
 	int max_grid_size_x = box_size[0];
@@ -239,6 +245,8 @@ void main_main ()
 		pp.query("ic_pressure_expr",        ic_pressure_expr);
 		pp.query("stop_after_init",         stop_after_init);
 	}
+
+	bool use_hypre = (poisson_solver == "hypre");
 
 	GpuArray<Real, AMREX_SPACEDIM> inflow_waveform;
 	for (int d = 0; d < AMREX_SPACEDIM; ++d) inflow_waveform[d] = inflow_vec[d];
@@ -721,7 +729,7 @@ void main_main ()
 		//poisson_righthand_side_calc(poisson_rhs, velCont, geom, dt);
 		poisson_righthand_side_calc(poisson_rhs, velStar, geom, dt);
 		// POISSON |2| Init Phi at the begining of the Poisson solver
-		poisson_advance(poisson_sol, poisson_rhs, geom, ba, dm, bc);
+		poisson_advance(poisson_sol, poisson_rhs, geom, ba, dm, bc, use_hypre);
 		//GMRESPOISSON gmres_poisson(ba, dm, geom);
 
 		//poisson_sol.setVal(0.0);

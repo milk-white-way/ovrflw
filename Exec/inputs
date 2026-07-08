@@ -7,17 +7,17 @@ hi_phy_dim = 10.0 1.0 1.0
 #-------------------------------------------
 
 #----- specify computational grid ----------
-n_cell = 640 64 64
-box_size = 640 64 64
+n_cell = 320 64 64
+box_size = 320 64 64
 #-------------------------------------------
 
 #----- temporal settings -------------------
-fixed_dt = 1.0e-4
+fixed_dt = 0.00001
 nsteps = 1000
 #-------------------------------------------
 
 #----- fluid properties --------------------
-ren = 1
+ren = 0.1
 vis = 1
 #-------------------------------------------
 
@@ -56,6 +56,12 @@ ic_pressure_static  = 0.0
 #ic_velocity_z_expr  = "0"
 #ic_pressure_expr    = "-(1.0/16.0)*(cos(2.0*x)+cos(2.0*y))*(cos(2.0*z)+2)"
 #-------------------------------------------
+
+# ----- Poisson solver -------------------------
+# Options: "hypre" (HYPRE BoomerAMG, handles non-uniform grids well)
+#          "multigrid" (AMReX geometric multigrid)
+poisson_solver = hypre
+#----------------------------------------------
 
 PSEUDO_TIMESTEPPING = 1
 

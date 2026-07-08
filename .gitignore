@@ -41,6 +41,8 @@ Tests/tgv_2d/checkpoint*/
 Tests/ldc/plt*/
 Tests/ldc/checkpoint*/
 Tests/ldc/*.log
+Tests/ldc/*.ex
+Tests/ldc/tmp_build_dir
 Tests/tgv_2d/*.log
 Tests/pipe_uniform/
 

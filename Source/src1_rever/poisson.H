@@ -21,7 +21,8 @@ void poisson_advance (amrex::MultiFab& poisson_sol,
                       amrex::Geometry const& geom,
                       amrex::BoxArray const& grids,
                       amrex::DistributionMapping const& dmap,
-                      amrex::Vector<amrex::BCRec> const& bc);
+                      amrex::Vector<amrex::BCRec> const& bc,
+                      bool use_hypre);
 
 void init_phi (amrex::MultiFab& phi);
 

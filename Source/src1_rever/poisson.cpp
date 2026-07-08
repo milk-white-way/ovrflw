@@ -44,7 +44,8 @@ void poisson_advance( MultiFab& poisson_sol,
                       Geometry const& geom,
                       BoxArray const& grids,
                       DistributionMapping const& dmap,
-                      Vector<BCRec> const& bc )
+                      Vector<BCRec> const& bc,
+                      bool use_hypre )
 {
 	BL_PROFILE_VAR("poisson_advance()", poisson_advance);
 /*
@@ -53,12 +54,6 @@ void poisson_advance( MultiFab& poisson_sol,
  * for an implicit discretization of the heat equation
  * (I - div dt grad) phi^{n+1} = phi^n
 */
-    bool semicoarsening = false;
-    int semicoarsening_direction = 0;
-    int semicoarsening_level = 1;
-    //int max_coarsening_level = 0;
-
-    bool use_hypre = false;
 
     // initialize valid and ghost region to zero
     poisson_sol.setVal(0.0);
@@ -66,10 +61,15 @@ void poisson_advance( MultiFab& poisson_sol,
     // assorment of solver and parallization options and parameters
     // see AMReX_MLLinOp.H for the defaults, accessors, and mutators
     LPInfo info;
-    info.setSemicoarsening(semicoarsening);
-    info.setSemicoarseningDirection(semicoarsening_direction);
-    info.setMaxSemicoarseningLevel(semicoarsening_level);
-    //info.setMaxCoarseningLevel(max_coarsening_level);
+    if (use_hypre) {
+        // HYPRE as bottom solver — restrict geometric coarsening;
+        // HYPRE BoomerAMG handles aspect-ratio cells algebraically.
+        info.setSemicoarsening(true);
+        info.setSemicoarseningDirection(0);
+        info.setMaxSemicoarseningLevel(1);
+        info.setMaxCoarseningLevel(0);
+    }
+    // else: use AMReX default LPInfo (full geometric multigrid)
 
     // Implicit solve using MLABecLaplacian class
     MLABecLaplacian mlabec({geom}, {grids}, {dmap}, info);
